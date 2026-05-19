@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        .font-arabic { font-family: 'Amiri', serif; }
+        /* Ограничитель строк для длинных переводов */
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;  
+            overflow: hidden;
+        }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-[#F3F4F9] min-h-screen text-slate-800 font-sans antialiased p-4">
+
+    <div class="max-w-md mx-auto space-y-4 mt-10 pb-10">
+
+        <article x-data="{ isSaved: true }" class="bg-white border border-slate-200/60 rounded-2xl p-4 flex flex-col gap-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-[0_4px_15px_rgba(0,0,0,0.05)] transition-all cursor-pointer relative overflow-hidden">
+            
+            <div class="flex justify-between items-start gap-4 pr-12">
+                <div class="shrink-0 flex flex-col items-start">
+                    <span class="text-4xl font-arabic text-slate-900" dir="rtl">جَاءَ</span>
+                </div>
+                <div class="flex-1 mt-1 text-right">
+                    <h3 class="text-[16px] text-slate-700 font-medium leading-snug line-clamp-2">
+                        Приходить, прибывать, являться
+                    </h3>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-end mt-1 pr-12">
+                <div class="flex items-center gap-1.5">
+                    <span class="bg-[#44D0F0]/15 text-[#008EAA] border border-[#44D0F0]/20 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wide">
+                        глагол
+                    </span>
+                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-[1px]">Порода I</span>
+                </div>
+
+                <div class="flex items-center gap-3 text-slate-400 justify-end">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-[10px] uppercase font-bold tracking-wider opacity-80">корень</span>
+                        <span class="text-[18px] font-arabic text-slate-500 tracking-widest" dir="rtl">ج ي ء</span>
+                    </div>
+                    <div class="w-px h-3 bg-slate-300"></div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-[10px] uppercase font-bold tracking-wider opacity-80">наст.вр</span>
+                        <span class="text-[18px] font-arabic text-[#5665B2]" dir="rtl">يَجِيءُ</span>
+                    </div>
+                </div>
+            </div>
+
+           <div class="absolute right-3 top-1/2 -translate-y-1/2 z-10">
+    <button @click.stop="isSaved = !isSaved" 
+            class="p-2 rounded-full transition-all duration-200 active:scale-90 hover:bg-slate-50"
+            :class="isSaved ? 'text-[#5665B2]' : 'text-slate-300 hover:text-slate-400'">
+        <svg class="w-[26px] h-[26px]" :fill="isSaved ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+        </svg>
+    </button>
+</div>
+            
+        </article>
+
+        <article x-data="{ isSaved: false }" class="bg-white border border-slate-200/60 rounded-2xl p-4 flex flex-col gap-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-[0_4px_15px_rgba(0,0,0,0.05)] transition-all cursor-pointer relative overflow-hidden">
+            
+            <div class="flex justify-between items-start gap-4 pr-12">
+                <div class="shrink-0 flex flex-col items-start">
+                    <span class="text-4xl font-arabic text-slate-900" dir="rtl">مَجْلِس</span>
+                </div>
+                <div class="flex-1 mt-1 text-right">
+                    <h3 class="text-[16px] text-slate-700 font-medium leading-snug line-clamp-2">
+                        Место (где сидят); зал заседаний
+                    </h3>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-end mt-1 pr-12">
+                <div class="flex items-center gap-1.5">
+                    <span class="bg-[#BFF044]/20 text-[#4D6600] border border-[#BFF044]/30 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wide">
+                        имя
+                    </span>
+                </div>
+
+                <div class="flex items-center gap-3 text-slate-400 justify-end">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-[10px] uppercase font-bold tracking-wider opacity-80">корень</span>
+                        <span class="text-[18px] font-arabic text-slate-500 tracking-widest" dir="rtl">ج ل س</span>
+                    </div>
+                    <div class="w-px h-3 bg-slate-300"></div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-[10px] uppercase font-bold tracking-wider opacity-80">мн.ч</span>
+                        <span class="text-[18px] font-arabic text-[#5665B2]" dir="rtl">مَجَالِس</span>
+                    </div>
+                </div>
+            </div>
+
+           <div class="absolute right-3 top-1/2 -translate-y-1/2 z-10">
+    <button @click.stop="isSaved = !isSaved" 
+            class="p-2 rounded-full transition-all duration-200 active:scale-90 hover:bg-slate-50"
+            :class="isSaved ? 'text-[#5665B2]' : 'text-slate-300 hover:text-slate-400'">
+        <svg class="w-[26px] h-[26px]" :fill="isSaved ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+        </svg>
+    </button>
+</div>
+
+        </article>
+
+    </div>
+
+</body>
+</html>
