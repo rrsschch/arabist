@@ -35,15 +35,15 @@
                 </div>
             </div>
 
-            <div class="flex justify-between items-end mt-1 pr-12">
-                <div class="flex items-center gap-1.5">
+            <div class="flex flex-wrap justify-between items-end mt-1 pr-12 gap-y-2 gap-x-4">
+                <div class="flex items-center gap-1.5 shrink-0">
                     <span class="bg-[#44D0F0]/15 text-[#008EAA] border border-[#44D0F0]/20 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wide">
                         глагол
                     </span>
                     <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-[1px]">Порода I</span>
                 </div>
 
-                <div class="flex items-center gap-3 text-slate-400 justify-end">
+                <div class="flex items-center gap-2 text-slate-400 justify-end shrink-0">
                     <div class="flex items-center gap-1.5">
                         <span class="text-[10px] uppercase font-bold tracking-wider opacity-80">корень</span>
                         <span class="text-[18px] font-arabic text-slate-500 tracking-widest" dir="rtl">ج ي ء</span>
@@ -56,15 +56,15 @@
                 </div>
             </div>
 
-           <div class="absolute right-3 top-1/2 -translate-y-1/2 z-10">
-    <button @click.stop="isSaved = !isSaved" 
-            class="p-2 rounded-full transition-all duration-200 active:scale-90 hover:bg-slate-50"
-            :class="isSaved ? 'text-[#5665B2]' : 'text-slate-300 hover:text-slate-400'">
-        <svg class="w-[26px] h-[26px]" :fill="isSaved ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
-        </svg>
-    </button>
-</div>
+            <div class="absolute right-3 top-1/2 -translate-y-1/2 z-10">
+                <button @click.stop="isSaved = !isSaved" 
+                        class="p-2 rounded-full transition-all duration-200 active:scale-90 hover:bg-slate-50"
+                        :class="isSaved ? 'text-[#5665B2]' : 'text-slate-300 hover:text-slate-400'">
+                    <svg class="w-[26px] h-[26px]" :fill="isSaved ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+                    </svg>
+                </button>
+            </div>
             
         </article>
 
@@ -81,14 +81,14 @@
                 </div>
             </div>
 
-            <div class="flex justify-between items-end mt-1 pr-12">
-                <div class="flex items-center gap-1.5">
+            <div class="flex flex-wrap justify-between items-end mt-1 pr-12 gap-y-2 gap-x-4">
+                <div class="flex items-center gap-1.5 shrink-0">
                     <span class="bg-[#BFF044]/20 text-[#4D6600] border border-[#BFF044]/30 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wide">
                         имя
                     </span>
                 </div>
 
-                <div class="flex items-center gap-3 text-slate-400 justify-end">
+                <div class="flex items-center gap-2 text-slate-400 justify-end shrink-0">
                     <div class="flex items-center gap-1.5">
                         <span class="text-[10px] uppercase font-bold tracking-wider opacity-80">корень</span>
                         <span class="text-[18px] font-arabic text-slate-500 tracking-widest" dir="rtl">ج ل س</span>
@@ -101,15 +101,15 @@
                 </div>
             </div>
 
-           <div class="absolute right-3 top-1/2 -translate-y-1/2 z-10">
-    <button @click.stop="isSaved = !isSaved" 
-            class="p-2 rounded-full transition-all duration-200 active:scale-90 hover:bg-slate-50"
-            :class="isSaved ? 'text-[#5665B2]' : 'text-slate-300 hover:text-slate-400'">
-        <svg class="w-[26px] h-[26px]" :fill="isSaved ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
-        </svg>
-    </button>
-</div>
+            <div class="absolute right-3 top-1/2 -translate-y-1/2 z-10">
+                <button @click.stop="isSaved = !isSaved" 
+                        class="p-2 rounded-full transition-all duration-200 active:scale-90 hover:bg-slate-50"
+                        :class="isSaved ? 'text-[#5665B2]' : 'text-slate-300 hover:text-slate-400'">
+                    <svg class="w-[26px] h-[26px]" :fill="isSaved ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+                    </svg>
+                </button>
+            </div>
 
         </article>
 
