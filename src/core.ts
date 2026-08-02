@@ -25,9 +25,8 @@ export interface Lexeme {
   details: LexemeDetails
 }
 
-export interface Folder { id: string; title: string; emoji: string }
-export interface Deck { id: string; folderId: string; title: string; emoji: string; wordIds: string[] }
-export interface LibraryState { folders: Folder[]; decks: Deck[] }
+export interface Deck { id: string; title: string; emoji: string; wordIds: string[] }
+export interface LibraryState { decks: Deck[] }
 export interface ReviewEvent { lexemeId: string; grade: ReviewGrade; reviewedAt: string }
 export interface TrainingSession {
   id: string
@@ -65,8 +64,10 @@ export const lexemeSchema = z.object({
 })
 export const lexemeListSchema = z.array(lexemeSchema)
 
-const STORAGE_PREFIX = 'sanna.mock.v1'
+const STORAGE_PREFIX = 'sanna.mock.v2'
+const LEGACY_STORAGE_PREFIX = 'sanna.mock.v1'
 const key = (name: string) => `${STORAGE_PREFIX}.${name}`
+const legacyKey = (name: string) => `${LEGACY_STORAGE_PREFIX}.${name}`
 
 function read<T>(name: string, fallback: T): T {
   try {
@@ -76,18 +77,16 @@ function read<T>(name: string, fallback: T): T {
 }
 function write<T>(name: string, value: T) { localStorage.setItem(key(name), JSON.stringify(value)) }
 export function resetDemoData() {
-  Object.keys(localStorage).filter((item) => item.startsWith(STORAGE_PREFIX)).forEach((item) => localStorage.removeItem(item))
+  Object.keys(localStorage)
+    .filter((item) => item.startsWith(STORAGE_PREFIX) || item.startsWith(LEGACY_STORAGE_PREFIX))
+    .forEach((item) => localStorage.removeItem(item))
 }
 
 const defaultLibrary: LibraryState = {
-  folders: [
-    { id: 'arabic', emoji: '📚', title: 'Арабский язык' },
-    { id: 'phrases', emoji: '💬', title: 'Разговорник' },
-  ],
   decks: [
-    { id: 'food', folderId: 'arabic', emoji: '🥑', title: 'Еда и продукты', wordIds: [] },
-    { id: 'verbs', folderId: 'arabic', emoji: '🏃', title: 'Глаголы', wordIds: [] },
-    { id: 'popular', folderId: 'phrases', emoji: '👋', title: 'Популярные фразы', wordIds: [] },
+    { id: 'food', emoji: '🥑', title: 'Еда и продукты', wordIds: [] },
+    { id: 'verbs', emoji: '🏃', title: 'Глаголы', wordIds: [] },
+    { id: 'popular', emoji: '👋', title: 'Популярные фразы', wordIds: [] },
   ],
 }
 const defaultProfile: Profile = {
@@ -101,11 +100,9 @@ export interface LexemeRepository {
 }
 export interface LibraryRepository {
   get(): Promise<LibraryState>
-  createFolder(title: string, emoji?: string): Promise<Folder>
-  createDeck(folderId: string, title: string, emoji?: string): Promise<Deck>
-  rename(kind: 'folder' | 'deck', id: string, title: string): Promise<void>
-  remove(kind: 'folder' | 'deck', id: string): Promise<void>
-  moveDeck(deckId: string, folderId: string): Promise<void>
+  createDeck(title: string, emoji?: string): Promise<Deck>
+  rename(id: string, title: string): Promise<void>
+  remove(id: string): Promise<void>
   toggleLexeme(deckId: string, lexemeId: string): Promise<boolean>
 }
 export interface ReviewRepository {
@@ -144,29 +141,30 @@ function normalize(value: string) {
 function makeId(prefix: string) { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` }
 
 class LocalLibraryRepository implements LibraryRepository {
-  async get() { return read('library', defaultLibrary) }
-  private save(value: LibraryState) { write('library', value) }
-  async createFolder(title: string, emoji = '📁') {
-    const state = await this.get(); const folder = { id: makeId('folder'), title, emoji }
-    state.folders.push(folder); this.save(state); return folder
+  async get() {
+    const current = localStorage.getItem(key('library'))
+    if (current) return read('library', defaultLibrary)
+    const legacy = localStorage.getItem(legacyKey('library'))
+    if (!legacy) return structuredClone(defaultLibrary)
+    try {
+      const migrated = migrateLibraryState(JSON.parse(legacy))
+      this.save(migrated)
+      return migrated
+    } catch { return structuredClone(defaultLibrary) }
   }
-  async createDeck(folderId: string, title: string, emoji = '✨') {
-    const state = await this.get(); const deck = { id: makeId('deck'), folderId, title, emoji, wordIds: [] }
+  private save(value: LibraryState) { write('library', value) }
+  async createDeck(title: string, emoji = '✨') {
+    const state = await this.get(); const deck = { id: makeId('deck'), title, emoji, wordIds: [] }
     state.decks.push(deck); this.save(state); return deck
   }
-  async rename(kind: 'folder' | 'deck', id: string, title: string) {
-    const state = await this.get(); const item = (kind === 'folder' ? state.folders : state.decks).find((entry) => entry.id === id)
+  async rename(id: string, title: string) {
+    const state = await this.get(); const item = state.decks.find((entry) => entry.id === id)
     if (item) item.title = title; this.save(state)
   }
-  async remove(kind: 'folder' | 'deck', id: string) {
+  async remove(id: string) {
     const state = await this.get()
-    if (kind === 'folder') { state.folders = state.folders.filter((f) => f.id !== id); state.decks = state.decks.filter((d) => d.folderId !== id) }
-    else state.decks = state.decks.filter((d) => d.id !== id)
+    state.decks = state.decks.filter((deck) => deck.id !== id)
     this.save(state)
-  }
-  async moveDeck(deckId: string, folderId: string) {
-    const state = await this.get(); const deck = state.decks.find((d) => d.id === deckId)
-    if (deck) deck.folderId = folderId; this.save(state)
   }
   async toggleLexeme(deckId: string, lexemeId: string) {
     const state = await this.get(); const deck = state.decks.find((d) => d.id === deckId)
@@ -175,6 +173,33 @@ class LocalLibraryRepository implements LibraryRepository {
     deck.wordIds = saved ? [...deck.wordIds, lexemeId] : deck.wordIds.filter((id) => id !== lexemeId)
     this.save(state); return saved
   }
+}
+
+export function migrateLibraryState(value: unknown): LibraryState {
+  if (!value || typeof value !== 'object') return structuredClone(defaultLibrary)
+  const decks = (value as { decks?: unknown }).decks
+  if (!Array.isArray(decks)) return structuredClone(defaultLibrary)
+  const seen = new Set<string>()
+  return {
+    decks: decks.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') return []
+      const candidate = entry as Partial<Deck>
+      if (typeof candidate.id !== 'string' || !candidate.id || seen.has(candidate.id) || typeof candidate.title !== 'string') return []
+      seen.add(candidate.id)
+      return [{
+        id: candidate.id,
+        title: candidate.title,
+        emoji: typeof candidate.emoji === 'string' ? candidate.emoji : '✨',
+        wordIds: Array.isArray(candidate.wordIds) ? [...new Set(candidate.wordIds.filter((id): id is string => typeof id === 'string'))] : [],
+      }]
+    }),
+  }
+}
+
+export function buildTrainingQueue(library: LibraryState, lexemes: Lexeme[], limit = 20) {
+  const available = new Set(lexemes.map((word) => word.id))
+  const saved = [...new Set(library.decks.flatMap((deck) => deck.wordIds))].filter((id) => available.has(id))
+  return (saved.length ? saved : lexemes.map((word) => word.id)).slice(0, limit)
 }
 
 class LocalReviewRepository implements ReviewRepository {

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { hasDetails, lexemeSchema, posLabels, type Lexeme } from './core'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { buildTrainingQueue, hasDetails, lexemeSchema, migrateLibraryState, posLabels, repositories, resetDemoData, type Lexeme } from './core'
 
 const particle: Lexeme = {
   id: 'e56d27ff-9b5a-5a52-b90f-02e5233e711b',
@@ -26,5 +26,38 @@ describe('public lexeme model', () => {
   it('rejects internal metadata in strict public payload checks', () => {
     const result = lexemeSchema.strict().safeParse({ ...particle, review: { status: 'ok' } })
     expect(result.success).toBe(false)
+  })
+})
+
+describe('flat deck library', () => {
+  beforeEach(() => resetDemoData())
+
+  it('migrates legacy folders into a flat, deduplicated deck list', () => {
+    expect(migrateLibraryState({
+      folders: [{ id: 'arabic', title: 'Арабский язык', emoji: '📚' }],
+      decks: [
+        { id: 'saved', folderId: 'arabic', title: 'Мои слова', emoji: '⭐', wordIds: ['one', 'one', 'two'] },
+        { id: 'saved', folderId: 'arabic', title: 'Дубликат', emoji: '❌', wordIds: [] },
+      ],
+    })).toEqual({ decks: [{ id: 'saved', title: 'Мои слова', emoji: '⭐', wordIds: ['one', 'two'] }] })
+  })
+
+  it('persists migrated v1 data and supports deck-only operations', async () => {
+    localStorage.setItem('sanna.mock.v1.library', JSON.stringify({
+      folders: [{ id: 'old-folder' }],
+      decks: [{ id: 'old-deck', folderId: 'old-folder', title: 'Старая колода', emoji: '📖', wordIds: ['one'] }],
+    }))
+    expect((await repositories.library.get()).decks[0]).toEqual({ id: 'old-deck', title: 'Старая колода', emoji: '📖', wordIds: ['one'] })
+    const created = await repositories.library.createDeck('Новая')
+    await repositories.library.toggleLexeme(created.id, 'two')
+    expect((await repositories.library.get()).decks.find((deck) => deck.id === created.id)?.wordIds).toEqual(['two'])
+    await repositories.library.remove(created.id)
+    expect((await repositories.library.get()).decks.some((deck) => deck.id === created.id)).toBe(false)
+  })
+
+  it('builds one shared queue from saved words and falls back to dictionary order', () => {
+    const words = ['one', 'two', 'three'].map((id) => ({ ...particle, id }))
+    expect(buildTrainingQueue({ decks: [{ id: 'deck', title: 'A', emoji: '✨', wordIds: ['three', 'three', 'missing'] }] }, words)).toEqual(['three'])
+    expect(buildTrainingQueue({ decks: [] }, words, 2)).toEqual(['one', 'two'])
   })
 })
