@@ -136,8 +136,11 @@ test('applies Telegram content safe area above the first screen content', async 
   const paddingTop = await page.locator('main.app-shell').evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop))
   expect(paddingTop).toBeGreaterThanOrEqual(104)
   await page.goto('/dictionary')
-  const stickyTop = await page.locator('.dictionary-tools').evaluate((element) => Number.parseFloat(getComputedStyle(element).top))
-  expect(stickyTop).toBeGreaterThanOrEqual(104)
+  const tools = page.locator('.dictionary-tools')
+  const stickyTop = await tools.evaluate((element) => Number.parseFloat(getComputedStyle(element).top))
+  expect(stickyTop).toBe(0)
+  const searchTop = (await tools.locator('input').boundingBox())!.y
+  expect(searchTop).toBeGreaterThanOrEqual(104)
   await page.goto('/lexemes/e56d27ff-9b5a-5a52-b90f-02e5233e711b')
   const standalonePadding = await page.locator('main.app-shell').evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop))
   expect(standalonePadding).toBeGreaterThanOrEqual(104)
@@ -148,4 +151,69 @@ test('does not add Telegram clearance in a regular browser', async ({ page }) =>
   await expect(page.locator('html')).toHaveAttribute('data-telegram', 'false')
   const paddingTop = await page.locator('main.app-shell').evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop))
   expect(paddingTop).toBeLessThan(104)
+})
+
+test('places audio and bookmark controls on either side of the lexeme', async ({ page }) => {
+  await page.goto('/lexemes/e56d27ff-9b5a-5a52-b90f-02e5233e711b')
+  const actions = page.locator('.lexeme-word-actions')
+  const audio = actions.getByRole('button', { name: 'Озвучивание пока недоступно' })
+  const word = actions.locator('.lexeme-word')
+  const bookmark = actions.getByRole('button', { name: 'Сохранить слово' })
+  await expect(audio).toBeDisabled()
+  await expect(actions.locator(':scope > *')).toHaveCount(3)
+  const [audioBox, wordBox, bookmarkBox] = await Promise.all([audio.boundingBox(), word.boundingBox(), bookmark.boundingBox()])
+  expect(audioBox!.x).toBeLessThan(wordBox!.x)
+  expect(wordBox!.x).toBeLessThan(bookmarkBox!.x)
+  expect(audioBox!.width).toBeGreaterThanOrEqual(44)
+  expect(bookmarkBox!.width).toBeGreaterThanOrEqual(44)
+})
+
+test('opens dialogs in the center and restores page scrolling after close', async ({ page }) => {
+  await page.goto('/library')
+  await page.getByRole('button', { name: /Новая колода/ }).click()
+  const dialog = page.getByRole('dialog', { name: 'Новая колода' })
+  await expect(dialog).toBeVisible()
+  const viewport = page.viewportSize()!
+  const box = await dialog.boundingBox()
+  expect(box!.width).toBeLessThanOrEqual(440)
+  expect(Math.abs(box!.y + box!.height / 2 - viewport.height / 2)).toBeLessThan(32)
+  await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden')
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('')
+})
+
+test('masks scrolling dictionary cards above the search in Telegram', async ({ page }) => {
+  await page.route('https://telegram.org/js/telegram-web-app.js', (route) => route.abort())
+  await page.addInitScript(() => {
+    const empty = () => undefined
+    window.Telegram = { WebApp: {
+      initData: 'test', platform: 'ios', colorScheme: 'light', themeParams: {},
+      safeAreaInset: { top: 12, right: 0, bottom: 0, left: 0 },
+      contentSafeAreaInset: { top: 48, right: 0, bottom: 0, left: 0 },
+      ready: empty, expand: empty, setHeaderColor: empty, setBackgroundColor: empty,
+      onEvent: empty, offEvent: empty,
+      BackButton: { show: empty, hide: empty, onClick: empty, offClick: empty },
+    } }
+  })
+  await page.goto('/dictionary')
+  await expect(page.locator('.word-card').first()).toBeVisible({ timeout: 15_000 })
+  await page.evaluate(() => window.scrollTo(0, 700))
+  const tools = page.locator('.dictionary-tools')
+  await expect.poll(async () => (await tools.boundingBox())?.y).toBe(0)
+  const inputBox = await tools.locator('input').boundingBox()
+  expect(inputBox!.y).toBeGreaterThanOrEqual(104)
+  const mask = await tools.evaluate((element) => {
+    const style = getComputedStyle(element, '::before')
+    return { width: Number.parseFloat(style.width), color: style.backgroundColor }
+  })
+  expect(mask.width).toBeGreaterThanOrEqual(page.viewportSize()!.width)
+  expect(mask.color).not.toBe('rgba(0, 0, 0, 0)')
+})
+
+test('honors reduced motion preferences', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/')
+  const duration = await page.locator('.route-content').evaluate((element) => Number.parseFloat(getComputedStyle(element).animationDuration))
+  expect(duration).toBeLessThanOrEqual(0.001)
 })
