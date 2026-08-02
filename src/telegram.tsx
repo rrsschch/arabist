@@ -35,18 +35,56 @@ const TelegramContext = createContext<TelegramContextValue>({
 })
 
 function applyInsets(app: TelegramWebApp) {
-  const safe = app.contentSafeAreaInset ?? app.safeAreaInset
-  if (!safe) return
   const root = document.documentElement
-  root.style.setProperty('--tg-safe-top', `${safe.top}px`)
-  root.style.setProperty('--tg-safe-right', `${safe.right}px`)
-  root.style.setProperty('--tg-safe-bottom', `${safe.bottom}px`)
-  root.style.setProperty('--tg-safe-left', `${safe.left}px`)
+  const apply = (prefix: string, inset?: Insets) => {
+    if (!inset) return
+    root.style.setProperty(`--${prefix}-top`, `${inset.top}px`)
+    root.style.setProperty(`--${prefix}-right`, `${inset.right}px`)
+    root.style.setProperty(`--${prefix}-bottom`, `${inset.bottom}px`)
+    root.style.setProperty(`--${prefix}-left`, `${inset.left}px`)
+  }
+  apply('tg-safe', app.safeAreaInset)
+  apply('tg-content-safe', app.contentSafeAreaInset)
+}
+
+export function isTextEntryElement(element: Element | null) {
+  return Boolean(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement || element instanceof HTMLElement && element.isContentEditable)
+}
+
+export function isKeyboardLikelyOpen(baselineHeight: number, viewportHeight: number, activeElement: Element | null) {
+  return isTextEntryElement(activeElement) && baselineHeight - viewportHeight > 120
+}
+
+function useKeyboardVisibility() {
+  useEffect(() => {
+    const viewport = window.visualViewport
+    if (!viewport) return
+    let baselineHeight = viewport.height
+    const sync = () => {
+      const focused = isTextEntryElement(document.activeElement)
+      if (!focused) baselineHeight = Math.max(baselineHeight, viewport.height)
+      document.documentElement.dataset.keyboardOpen = String(isKeyboardLikelyOpen(baselineHeight, viewport.height, document.activeElement))
+    }
+    const syncAfterFocus = () => window.setTimeout(sync, 0)
+    viewport.addEventListener('resize', sync)
+    window.addEventListener('orientationchange', syncAfterFocus)
+    document.addEventListener('focusin', syncAfterFocus)
+    document.addEventListener('focusout', syncAfterFocus)
+    sync()
+    return () => {
+      viewport.removeEventListener('resize', sync)
+      window.removeEventListener('orientationchange', syncAfterFocus)
+      document.removeEventListener('focusin', syncAfterFocus)
+      document.removeEventListener('focusout', syncAfterFocus)
+      delete document.documentElement.dataset.keyboardOpen
+    }
+  }, [])
 }
 
 export function TelegramProvider({ children }: { children: ReactNode }) {
   const app = window.Telegram?.WebApp ?? null
   const [colorScheme, setColorScheme] = useState<'light' | 'dark'>(app?.colorScheme ?? 'light')
+  useKeyboardVisibility()
   useEffect(() => {
     if (!app) return
     const sync = () => { setColorScheme(app.colorScheme); applyInsets(app) }
