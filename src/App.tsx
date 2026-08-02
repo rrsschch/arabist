@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, BarChart3, Bell, Bookmark, BookOpen, Check, ChevronRight, CircleHelp, EllipsisVertical,
   Home as HomeIcon, Library as LibraryIcon, ListChecks, LoaderCircle, Moon, MoveRight, Pencil, Plus,
   RotateCcw, Search, Settings, Sparkles, Sun, Trash2, UserRound, Volume2, X, Zap,
 } from 'lucide-react'
-import { Link, NavLink, Navigate, Outlet, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   buildTrainingQueue, genderLabels, hasDetails, posLabels, repositories, resetDemoData,
   type Accent, type Deck, type Lexeme, type Profile, type ReviewGrade,
@@ -43,9 +44,10 @@ export function App() {
 }
 
 function AppShell() {
+  const location = useLocation()
   return (
     <>
-      <main className="app-shell"><Outlet /></main>
+      <main className="app-shell"><div className="route-content" key={location.pathname}><Outlet /></div></main>
       <nav className="bottom-nav" aria-label="Основная навигация">
         <NavItem to="/" label="Главная" icon={<HomeIcon size={20} />} end />
         <NavItem to="/dictionary" label="Словарь" icon={<Search size={20} />} />
@@ -164,8 +166,8 @@ function LexemeDetail() {
   if (!word.data) return <Navigate to="/dictionary" replace />
   const item = word.data
   return <Standalone>
-    <div className="mb-4 flex items-center justify-between"><button className="button button-ghost icon-button" onClick={goBack} aria-label="Назад"><ArrowLeft /></button><button className="button button-ghost icon-button" disabled aria-label="Озвучивание пока недоступно" title="Озвучивание скоро"><Volume2 /></button></div>
-    <article className="card p-6 text-center"><div className="flex justify-between"><div className="text-left"><span className="eyebrow">Корень</span><p className="font-arabic mt-1 text-xl" dir="rtl">{item.details.root ?? '—'}</p></div><span className={`pos-badge pos-${item.pos} self-start`}>{posLabels[item.pos]}</span></div><p className="font-arabic mt-10 text-7xl leading-tight" dir="rtl">{item.word_ar}</p><button className="button button-ghost icon-button ml-auto mt-2" onClick={() => setSaveOpen(true)} aria-label="Сохранить слово"><Bookmark /></button><div className="my-4 h-px bg-[var(--border)]" /><ul className="grid gap-2 text-left">{item.translations.map((translation, index) => <li className="rounded-xl bg-[var(--surface-muted)] p-3 text-sm font-semibold" key={index}>{translation}</li>)}</ul></article>
+    <div className="mb-4"><button className="button button-ghost icon-button" onClick={goBack} aria-label="Назад"><ArrowLeft /></button></div>
+    <article className="card p-6 text-center"><div className="flex justify-between"><div className="text-left"><span className="eyebrow">Корень</span><p className="font-arabic mt-1 text-xl" dir="rtl">{item.details.root ?? '—'}</p></div><span className={`pos-badge pos-${item.pos} self-start`}>{posLabels[item.pos]}</span></div><div className="lexeme-word-actions"><button className="button button-ghost icon-button lexeme-audio-button" disabled aria-label="Озвучивание пока недоступно" title="Озвучивание скоро"><Volume2 /></button><p className="font-arabic lexeme-word" dir="rtl">{item.word_ar}</p><button className="button button-ghost icon-button lexeme-save-button" onClick={() => setSaveOpen(true)} aria-label="Сохранить слово"><Bookmark /></button></div><div className="my-4 h-px bg-[var(--border)]" /><ul className="grid gap-2 text-left">{item.translations.map((translation, index) => <li className="rounded-xl bg-[var(--surface-muted)] p-3 text-sm font-semibold" key={index}>{translation}</li>)}</ul></article>
     {hasDetails(item) && <section className="card mt-4 p-5"><h2 className="text-lg font-extrabold">{item.pos === 'verb' ? 'Формы глагола' : item.pos === 'noun' ? 'Сведения об имени' : 'Дополнение'}</h2><div className="mt-4 grid grid-cols-2 gap-3">{detailRows(item).map(([label, value]) => <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-center" key={label}><span className="eyebrow">{label}</span><p className="font-arabic mt-1 text-xl font-bold" dir={/[\u0600-\u06ff]/.test(value) ? 'rtl' : undefined}>{value}</p></div>)}</div></section>}
     <section className="mt-4"><h2 className="mb-3 text-lg font-extrabold">Примеры</h2>{item.examples.length ? <div className="grid gap-3">{item.examples.map((example, index) => <p key={index} className="card p-4 text-sm leading-7">{example}</p>)}</div> : <EmptyState title="Примеров пока нет" text="Они появятся после расширения словарной базы." />}</section>
     {saveOpen && <SaveDialog word={item} onClose={() => setSaveOpen(false)} />}
@@ -251,7 +253,7 @@ function TrainingSessionPage() {
   const wordId = session.data.lexemeIds[session.data.cursor]; const word = words.data?.find((item) => item.id === wordId)
   if (!word) return <Standalone><ErrorState error={new Error('Слово не найдено')} /></Standalone>
   const progress = Math.round((session.data.cursor / session.data.lexemeIds.length) * 100)
-  return <Standalone><header className="flex items-center gap-3"><button className="button button-ghost icon-button" onClick={close} aria-label="Закрыть тренировку"><X /></button><div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--border)]"><div className="h-full rounded-full bg-[var(--accent)] transition-all" style={{ width: `${progress}%` }} /></div><span className="muted text-xs font-bold">{session.data.cursor + 1}/{session.data.lexemeIds.length}</span></header><div className="grid min-h-[calc(100dvh-170px)] content-center"><article className="card p-7 text-center"><span className={`pos-badge pos-${word.pos}`}>{posLabels[word.pos]}</span><p className="font-arabic mt-10 text-7xl" dir="rtl">{word.word_ar}</p>{revealed && <div className="mt-8 border-t border-[var(--border)] pt-6"><p className="text-lg font-extrabold">{word.translations.join('; ')}</p>{word.details.root && <p className="muted font-arabic mt-3" dir="rtl">Корень: {word.details.root}</p>}</div>}</article>{!revealed ? <button className="button button-primary mt-4 w-full" onClick={() => setRevealed(true)}>Показать ответ</button> : <div className="mt-4 grid grid-cols-3 gap-2"><GradeButton label="Снова" grade="again" className="bg-rose-50 text-rose-700" onClick={(grade) => answer.mutate({ wordId, grade })} /><GradeButton label="Трудно" grade="hard" className="bg-amber-50 text-amber-700" onClick={(grade) => answer.mutate({ wordId, grade })} /><GradeButton label="Легко" grade="easy" className="bg-emerald-50 text-emerald-700" onClick={(grade) => answer.mutate({ wordId, grade })} /></div>}</div></Standalone>
+  return <Standalone><header className="flex items-center gap-3"><button className="button button-ghost icon-button" onClick={close} aria-label="Закрыть тренировку"><X /></button><div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--border)]"><div className="training-progress h-full rounded-full bg-[var(--accent)]" style={{ width: `${progress}%` }} /></div><span className="muted text-xs font-bold">{session.data.cursor + 1}/{session.data.lexemeIds.length}</span></header><div className="grid min-h-[calc(100dvh-170px)] content-center"><article className="card p-7 text-center"><span className={`pos-badge pos-${word.pos}`}>{posLabels[word.pos]}</span><p className="font-arabic mt-10 text-7xl" dir="rtl">{word.word_ar}</p>{revealed && <div className="training-answer mt-8 border-t border-[var(--border)] pt-6"><p className="text-lg font-extrabold">{word.translations.join('; ')}</p>{word.details.root && <p className="muted font-arabic mt-3" dir="rtl">Корень: {word.details.root}</p>}</div>}</article>{!revealed ? <button className="button button-primary mt-4 w-full" onClick={() => setRevealed(true)}>Показать ответ</button> : <div className="training-grades mt-4 grid grid-cols-3 gap-2"><GradeButton label="Снова" grade="again" className="bg-rose-50 text-rose-700" onClick={(grade) => answer.mutate({ wordId, grade })} /><GradeButton label="Трудно" grade="hard" className="bg-amber-50 text-amber-700" onClick={(grade) => answer.mutate({ wordId, grade })} /><GradeButton label="Легко" grade="easy" className="bg-emerald-50 text-emerald-700" onClick={(grade) => answer.mutate({ wordId, grade })} /></div>}</div></Standalone>
 }
 
 function GradeButton({ label, grade, className, onClick }: { label: string; grade: ReviewGrade; className: string; onClick(grade: ReviewGrade): void }) { return <button className={`button ${className}`} onClick={() => onClick(grade)}>{label}</button> }
@@ -268,10 +270,38 @@ function SettingRow({ icon, label, children }: { icon: ReactNode; label: string;
 function accentColor(accent: Accent) { return { blue: '#2563eb', emerald: '#059669', purple: '#7c3aed', rose: '#e11d48', amber: '#d97706' }[accent] }
 
 function Dialog({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
-  const titleId = useId(); const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => { const previous = document.activeElement as HTMLElement | null; ref.current?.querySelector<HTMLElement>('button,input,select')?.focus(); const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }; document.addEventListener('keydown', onKey); return () => { document.removeEventListener('keydown', onKey); previous?.focus() } }, [onClose])
-  return <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><div ref={ref} className="dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}><header className="mb-5 flex items-center justify-between"><h2 id={titleId} className="text-xl font-black">{title}</h2><button className="button button-ghost icon-button" onClick={onClose} aria-label="Закрыть"><X /></button></header>{children}</div></div>
+  const titleId = useId(); const ref = useRef<HTMLDivElement>(null); const closeTimer = useRef<number | null>(null); const closingRef = useRef(false); const [closing, setClosing] = useState(false)
+  const requestClose = useCallback(() => {
+    if (closingRef.current) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { onClose(); return }
+    closingRef.current = true
+    setClosing(true)
+    closeTimer.current = window.setTimeout(onClose, 180)
+  }, [onClose])
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    ref.current?.querySelector<HTMLElement>('button,input,select,textarea,[href],[tabindex]:not([tabindex="-1"])')?.focus()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); requestClose(); return }
+      if (event.key !== 'Tab' || !ref.current) return
+      const focusable = [...ref.current.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[href],[tabindex]:not([tabindex="-1"])')]
+      if (!focusable.length) return
+      const first = focusable[0]; const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previousOverflow
+      if (closeTimer.current) window.clearTimeout(closeTimer.current)
+      previous?.focus()
+    }
+  }, [requestClose])
+  return createPortal(<div className="dialog-backdrop" data-state={closing ? 'closing' : 'open'} onMouseDown={(event) => { if (event.target === event.currentTarget) requestClose() }}><div ref={ref} className="dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}><header className="mb-5 flex items-center justify-between"><h2 id={titleId} className="text-xl font-black">{title}</h2><button className="button button-ghost icon-button" onClick={requestClose} aria-label="Закрыть"><X /></button></header>{children}</div></div>, document.body)
 }
 
-function Standalone({ children }: { children: ReactNode }) { return <main className="app-shell !pb-[calc(24px+var(--app-safe-bottom))]">{children}</main> }
+function Standalone({ children }: { children: ReactNode }) { return <main className="app-shell route-content !pb-[calc(24px+var(--app-safe-bottom))]">{children}</main> }
 function NotFound() { return <Standalone><EmptyState title="Страница не найдена" text="Вернитесь на главную страницу приложения." /><Link className="button button-primary mt-4 w-full no-underline" to="/">На главную</Link></Standalone> }
