@@ -25,6 +25,12 @@
   --app-safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-bottom), var(--tg-content-safe-bottom));
   --app-safe-left: max(env(safe-area-inset-left, 0px), var(--tg-safe-left), var(--tg-content-safe-left));
   --app-top-padding: calc(16px + var(--app-safe-top));
+  --app-sticky-top: 0px;
+}
+
+:root[data-telegram="true"] {
+  --app-top-padding: max(104px, calc(16px + var(--app-safe-top)));
+  --app-sticky-top: var(--app-top-padding);
 }
 
 :root[data-theme="dark"] {
@@ -90,15 +96,10 @@ button, a { touch-action: manipulation; }
 .search-field .search-input { padding-left: 3.25rem; padding-right: 3.25rem; }
 .search-field-clear { position: absolute; right: .25rem; top: 50%; transform: translateY(-50%); }
 .dictionary-tools {
-  position: sticky; z-index: 20; top: var(--app-safe-top);
+  position: sticky; z-index: 20; top: var(--app-sticky-top);
   margin: 0 -.5rem 1rem; padding: 0 .5rem .75rem;
   background: color-mix(in srgb, var(--surface-muted), transparent 5%); backdrop-filter: blur(12px);
 }
-.chip {
-  border: 1px solid var(--border); border-radius: 999px; padding: .48rem .8rem;
-  background: var(--surface); color: var(--muted); font-size: .78rem; font-weight: 750; white-space: nowrap;
-}
-.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: white; }
 .bottom-nav {
   position: fixed; z-index: 40; left: 50%; transform: translateX(-50%);
   bottom: calc(14px + var(--app-safe-bottom)); width: min(calc(100% - 24px), 520px);
@@ -116,6 +117,22 @@ button, a { touch-action: manipulation; }
 :root[data-keyboard-open="true"] .bottom-nav { display: none; }
 .word-list { display: grid; gap: 12px; }
 .word-card { color: inherit; text-decoration: none; padding: 1rem; display: grid; grid-template-columns: 1fr auto; gap: .8rem; }
+.selection-check {
+  width: 28px; height: 28px; align-self: center; display: grid; place-items: center;
+  border: 2px solid var(--border); border-radius: .65rem; color: white; background: var(--surface);
+}
+.word-card[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft), var(--surface) 35%); }
+.word-card[aria-pressed="true"] .selection-check { border-color: var(--accent); background: var(--accent); }
+.selection-bar {
+  position: fixed; z-index: 45; left: 50%; transform: translateX(-50%);
+  bottom: calc(94px + var(--app-safe-bottom)); width: min(calc(100% - 24px), 520px);
+  display: grid; grid-template-columns: auto 1fr 1fr; align-items: center; gap: 8px;
+  padding: 10px; border: 1px solid var(--border); border-radius: 1.35rem;
+  background: color-mix(in srgb, var(--surface), transparent 4%); box-shadow: 0 16px 40px rgba(15, 23, 42, .2); backdrop-filter: blur(18px);
+}
+.emoji-presets { display: flex; flex-wrap: wrap; gap: .5rem; }
+.emoji-choice { width: 44px; height: 44px; border: 1px solid var(--border); border-radius: .9rem; background: var(--surface-muted); font-size: 1.35rem; }
+.emoji-choice[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 .pos-badge { display: inline-flex; padding: .28rem .58rem; border-radius: 999px; font-size: .62rem; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
 .pos-noun { color: #3f6212; background: #ecfccb; }
 .pos-verb { color: #0e7490; background: #cffafe; }

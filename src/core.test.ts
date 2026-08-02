@@ -60,4 +60,27 @@ describe('flat deck library', () => {
     expect(buildTrainingQueue({ decks: [{ id: 'deck', title: 'A', emoji: '✨', wordIds: ['three', 'three', 'missing'] }] }, words)).toEqual(['three'])
     expect(buildTrainingQueue({ decks: [] }, words, 2)).toEqual(['one', 'two'])
   })
+
+  it('updates decks and atomically removes or moves selected words without duplicates', async () => {
+    const source = await repositories.library.createDeck('Источник', '📚')
+    const target = await repositories.library.createDeck('Назначение', '⭐')
+    await repositories.library.toggleLexeme(source.id, 'one')
+    await repositories.library.toggleLexeme(source.id, 'two')
+    await repositories.library.toggleLexeme(target.id, 'two')
+    await repositories.library.updateDeck(source.id, { title: '  Новое название  ', emoji: '🧠' })
+    await repositories.library.moveLexemes(source.id, target.id, ['one', 'two'])
+    let state = await repositories.library.get()
+    expect(state.decks.find((deck) => deck.id === source.id)).toMatchObject({ title: 'Новое название', emoji: '🧠', wordIds: [] })
+    expect(state.decks.find((deck) => deck.id === target.id)?.wordIds).toEqual(['two', 'one'])
+    await repositories.library.removeLexemes(target.id, ['two'])
+    state = await repositories.library.get()
+    expect(state.decks.find((deck) => deck.id === target.id)?.wordIds).toEqual(['one'])
+    expect(JSON.parse(localStorage.getItem('sanna.mock.v2.library') ?? '{}').decks).toBeDefined()
+  })
+
+  it('rejects moves when either deck is missing', async () => {
+    const source = await repositories.library.createDeck('Источник')
+    await expect(repositories.library.moveLexemes(source.id, 'missing', ['one'])).rejects.toThrow('Целевая колода не найдена')
+    await expect(repositories.library.moveLexemes('missing', source.id, ['one'])).rejects.toThrow('Исходная колода не найдена')
+  })
 })

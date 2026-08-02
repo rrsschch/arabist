@@ -1,9 +1,10 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 
 type Insets = { top: number; right: number; bottom: number; left: number }
 type TelegramWebApp = {
   initData: string
+  platform?: string
   colorScheme: 'light' | 'dark'
   themeParams: Record<string, string>
   safeAreaInset?: Insets
@@ -55,6 +56,10 @@ export function isKeyboardLikelyOpen(baselineHeight: number, viewportHeight: num
   return isTextEntryElement(activeElement) && baselineHeight - viewportHeight > 120
 }
 
+export function isTelegramEnvironment(app: { initData?: string; platform?: string } | null | undefined) {
+  return Boolean(app && (app.initData || app.platform && app.platform !== 'unknown'))
+}
+
 function useKeyboardVisibility() {
   useEffect(() => {
     const viewport = window.visualViewport
@@ -83,25 +88,33 @@ function useKeyboardVisibility() {
 
 export function TelegramProvider({ children }: { children: ReactNode }) {
   const app = window.Telegram?.WebApp ?? null
+  const isTelegram = isTelegramEnvironment(app)
   const [colorScheme, setColorScheme] = useState<'light' | 'dark'>(app?.colorScheme ?? 'light')
   useKeyboardVisibility()
-  useEffect(() => {
-    if (!app) return
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    root.dataset.telegram = String(isTelegram)
+    if (!app) return () => { delete root.dataset.telegram }
     const sync = () => { setColorScheme(app.colorScheme); applyInsets(app) }
     app.ready(); app.expand(); sync()
     app.setHeaderColor(app.themeParams.bg_color ?? '#f6f8fc')
     app.setBackgroundColor(app.themeParams.bg_color ?? '#f6f8fc')
     app.onEvent('themeChanged', sync); app.onEvent('safeAreaChanged', sync); app.onEvent('contentSafeAreaChanged', sync)
-    return () => { app.offEvent('themeChanged', sync); app.offEvent('safeAreaChanged', sync); app.offEvent('contentSafeAreaChanged', sync) }
-  }, [app])
+    window.addEventListener('orientationchange', sync)
+    return () => {
+      app.offEvent('themeChanged', sync); app.offEvent('safeAreaChanged', sync); app.offEvent('contentSafeAreaChanged', sync)
+      window.removeEventListener('orientationchange', sync)
+      delete root.dataset.telegram
+    }
+  }, [app, isTelegram])
   const rawUser = app?.initDataUnsafe?.user
   const value = useMemo<TelegramContextValue>(() => ({
     app,
-    isTelegram: Boolean(app?.initData),
+    isTelegram,
     colorScheme,
     user: rawUser ? { id: rawUser.id, firstName: rawUser.first_name, username: rawUser.username, photoUrl: rawUser.photo_url } : fallbackUser,
     haptic: () => app?.HapticFeedback?.impactOccurred('light'),
-  }), [app, colorScheme, rawUser])
+  }), [app, colorScheme, isTelegram, rawUser])
   return <TelegramContext.Provider value={value}>{children}</TelegramContext.Provider>
 }
 

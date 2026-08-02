@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeft, BarChart3, Bell, Bookmark, BookOpen, Check, ChevronRight, CircleHelp,
-  Home as HomeIcon, Library as LibraryIcon, LoaderCircle, Moon, Plus, RotateCcw,
-  Search, Settings, Sparkles, Sun, Trash2, UserRound, Volume2, X, Zap,
+  ArrowLeft, BarChart3, Bell, Bookmark, BookOpen, Check, ChevronRight, CircleHelp, EllipsisVertical,
+  Home as HomeIcon, Library as LibraryIcon, ListChecks, LoaderCircle, Moon, MoveRight, Pencil, Plus,
+  RotateCcw, Search, Settings, Sparkles, Sun, Trash2, UserRound, Volume2, X, Zap,
 } from 'lucide-react'
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   buildTrainingQueue, genderLabels, hasDetails, posLabels, repositories, resetDemoData,
-  type Accent, type Lexeme, type PartOfSpeech, type Profile, type ReviewGrade,
+  type Accent, type Deck, type Lexeme, type Profile, type ReviewGrade,
   type ThemePreference, type TrainingMode,
 } from './core'
 import { useTelegram, useTelegramBack } from './telegram'
@@ -121,32 +121,31 @@ function ProgressRing({ value }: { value: number }) {
 function Dictionary() {
   const [params, setParams] = useSearchParams()
   const [query, setQuery] = useState(params.get('q') ?? '')
-  const [pos, setPos] = useState<PartOfSpeech | 'all'>((params.get('pos') as PartOfSpeech) ?? 'all')
   const [saveWord, setSaveWord] = useState<Lexeme | null>(null)
   useEffect(() => {
     const timer = setTimeout(() => setParams((old) => {
       const next = new URLSearchParams(old)
       if (query) next.set('q', query)
       else next.delete('q')
-      if (pos !== 'all') next.set('pos', pos)
-      else next.delete('pos')
+      next.delete('pos')
       return next
     }, { replace: true }), 180)
     return () => clearTimeout(timer)
-  }, [query, pos, setParams])
-  const results = useQuery({ queryKey: ['search', query, pos], queryFn: () => repositories.lexemes.search({ query, pos, limit: 100 }) })
+  }, [query, setParams])
+  const results = useQuery({ queryKey: ['search', query], queryFn: () => repositories.lexemes.search({ query, limit: 100 }) })
   return <>
-    <div className="dictionary-tools space-y-3">
+    <div className="dictionary-tools">
       <label className="search-field"><span className="sr-only">Поиск слов</span><Search className="search-field-icon muted" size={20} /><input className="input search-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Слово, перевод или корень…" />{query && <button className="button button-ghost icon-button search-field-clear" aria-label="Очистить поиск" onClick={() => setQuery('')}><X size={19} /></button>}</label>
-      <div className="flex gap-2 overflow-x-auto pb-1" aria-label="Фильтр части речи">{(['all', 'noun', 'verb', 'particle'] as const).map((item) => <button key={item} className="chip" aria-pressed={pos === item} onClick={() => setPos(item)}>{item === 'all' ? 'Все' : posLabels[item]}</button>)}</div>
     </div>
     {results.isPending ? <LoadingState label="Открываем словарь…" /> : results.isError ? <ErrorState error={results.error} /> : results.data.length === 0 ? <EmptyState title="Ничего не найдено" text="Попробуйте слово без огласовок или другой перевод." /> : <div className="word-list">{results.data.map((word) => <WordRow key={word.id} word={word} onSave={() => setSaveWord(word)} />)}</div>}
     {saveWord && <SaveDialog word={saveWord} onClose={() => setSaveWord(null)} />}
   </>
 }
 
-function WordRow({ word, onSave }: { word: Lexeme; onSave?: () => void }) {
-  return <article className="card word-card"><Link to={`/lexemes/${word.id}`} className="min-w-0 text-inherit no-underline"><div className="flex items-center gap-2"><span className={`pos-badge pos-${word.pos}`}>{posLabels[word.pos]}</span>{word.details.root && <span className="muted font-arabic text-sm" dir="rtl">{word.details.root}</span>}</div><p className="font-arabic mt-2 text-right text-4xl font-bold" dir="rtl">{word.word_ar}</p><p className="mt-2 line-clamp-2 text-sm font-semibold">{word.translations.join('; ')}</p></Link>{onSave && <button className="button button-ghost icon-button self-center" aria-label={`Сохранить ${word.word_ar}`} onClick={onSave}><Bookmark size={21} /></button>}</article>
+function WordRow({ word, onSave, selected = false, onSelect }: { word: Lexeme; onSave?: () => void; selected?: boolean; onSelect?: () => void }) {
+  const content = <><div className="flex items-center gap-2"><span className={`pos-badge pos-${word.pos}`}>{posLabels[word.pos]}</span>{word.details.root && <span className="muted font-arabic text-sm" dir="rtl">{word.details.root}</span>}</div><p className="font-arabic mt-2 text-right text-4xl font-bold" dir="rtl">{word.word_ar}</p><p className="mt-2 line-clamp-2 text-sm font-semibold">{word.translations.join('; ')}</p></>
+  if (onSelect) return <button className="card word-card w-full text-left" aria-pressed={selected} aria-label={`${selected ? 'Снять выбор' : 'Выбрать'} ${word.word_ar}`} onClick={onSelect}><span className="min-w-0">{content}</span><span className="selection-check">{selected && <Check size={17} />}</span></button>
+  return <article className="card word-card"><Link to={`/lexemes/${word.id}`} className="min-w-0 text-inherit no-underline">{content}</Link>{onSave && <button className="button button-ghost icon-button self-center" aria-label={`Сохранить ${word.word_ar}`} onClick={onSave}><Bookmark size={21} /></button>}</article>
 }
 
 function SaveDialog({ word, onClose }: { word: Lexeme; onClose(): void }) {
@@ -179,18 +178,35 @@ function detailRows(word: Lexeme): [string, string][] {
 }
 
 function Library() {
-  const { deckId } = useParams(); const queryClient = useQueryClient(); const navigate = useNavigate(); const [create, setCreate] = useState(false)
+  const { deckId } = useParams(); const queryClient = useQueryClient(); const navigate = useNavigate()
+  const [create, setCreate] = useState(false); const [actionsDeck, setActionsDeck] = useState<Deck | null>(null); const [editingDeck, setEditingDeck] = useState<Deck | null>(null)
+  const [managing, setManaging] = useState(false); const [selected, setSelected] = useState<string[]>([]); const [moveOpen, setMoveOpen] = useState(false)
   const library = useQuery({ queryKey: queryKeys.library, queryFn: () => repositories.library.get() })
   const deck = library.data?.decks.find((item) => item.id === deckId)
   const words = useQuery({ queryKey: queryKeys.lexemes, queryFn: () => repositories.lexemes.list(), enabled: Boolean(deck) })
   const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.library })
-  const closeDeck = useCallback(() => navigate('/library'), [navigate])
+  const closeDeck = useCallback(() => {
+    if (managing) { setManaging(false); setSelected([]); return }
+    navigate('/library')
+  }, [managing, navigate])
+  useEffect(() => { setManaging(false); setSelected([]); setMoveOpen(false) }, [deckId])
   useTelegramBack(Boolean(deck), closeDeck)
   if (library.isPending) return <LoadingState />
   if (library.isError) return <ErrorState error={library.error} />
   if (deckId && !deck) return <Navigate to="/library" replace />
-  if (deck) return <><div className="mb-5 flex items-center gap-3"><button className="button button-ghost icon-button" onClick={closeDeck} aria-label="Назад"><ArrowLeft /></button><div><h1 className="text-xl font-extrabold">{deck.emoji} {deck.title}</h1><p className="muted text-xs">{deck.wordIds.length} слов</p></div></div>{deck.wordIds.length && words.data ? <div className="word-list">{deck.wordIds.map((id) => words.data.find((word) => word.id === id)).filter(Boolean).map((word) => <WordRow key={word!.id} word={word!} />)}</div> : <EmptyState title="Колода пустая" text="Сохраняйте слова из словаря — они появятся здесь." />}</>
-  return <><button className="button button-primary mb-4 w-full" onClick={() => setCreate(true)}><Plus /> Новая колода</button>{library.data.decks.length ? <div className="grid gap-3">{library.data.decks.map((item) => <LibraryTile key={item.id} emoji={item.emoji} title={item.title} subtitle={`${item.wordIds.length} слов`} to={`/library/${item.id}`} onDelete={async () => { if (confirm(`Удалить колоду «${item.title}»?`)) { await repositories.library.remove(item.id); await refresh() } }} />)}</div> : <EmptyState title="Колод пока нет" text="Создайте первую колоду и сохраняйте в неё слова из словаря." />}{create && <CreateDialog onClose={() => setCreate(false)} />}</>
+  if (deck) {
+    const deckWords = deck.wordIds.map((id) => words.data?.find((word) => word.id === id)).filter((word): word is Lexeme => Boolean(word))
+    const otherDecks = library.data.decks.filter((item) => item.id !== deck.id)
+    const toggleSelected = (id: string) => setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+    const finishAction = async () => { await refresh(); setSelected([]); setManaging(false); setMoveOpen(false) }
+    return <>
+      <div className="mb-5 flex items-center gap-3"><button className="button button-ghost icon-button" onClick={closeDeck} aria-label={managing ? 'Завершить управление' : 'Назад'}><ArrowLeft /></button><div className="min-w-0 flex-1"><h1 className="truncate text-xl font-extrabold">{deck.emoji} {deck.title}</h1><p className="muted text-xs">{deck.wordIds.length} слов</p></div>{deck.wordIds.length > 0 && <button className="button button-secondary" onClick={() => { setManaging((value) => !value); setSelected([]) }}><ListChecks size={18} /> {managing ? 'Готово' : 'Управление'}</button>}</div>
+      {deck.wordIds.length && words.data ? <div className="word-list">{deckWords.map((word) => <WordRow key={word.id} word={word} selected={selected.includes(word.id)} onSelect={managing ? () => toggleSelected(word.id) : undefined} />)}</div> : <><EmptyState title="Колода пустая" text="Добавьте слова из словаря — они появятся здесь." /><Link className="button button-primary mt-4 w-full no-underline" to="/dictionary"><Plus size={18} /> Добавить слова</Link></>}
+      {managing && selected.length > 0 && <><div className="h-28" /><div className="selection-bar" role="toolbar" aria-label="Действия с выбранными словами"><strong className="px-2 text-sm">{selected.length}</strong><button className="button button-secondary" onClick={() => setMoveOpen(true)}><MoveRight size={17} /> Переместить</button><button className="button bg-rose-50 text-rose-700" onClick={async () => { if (confirm(`Убрать выбранные слова (${selected.length}) из колоды?`)) { await repositories.library.removeLexemes(deck.id, selected); await finishAction() } }}><Trash2 size={17} /> Убрать</button></div></>}
+      {moveOpen && <MoveWordsDialog decks={otherDecks} count={selected.length} onClose={() => setMoveOpen(false)} onCreate={() => { setMoveOpen(false); setManaging(false); setSelected([]); navigate('/library') }} onMove={async (targetId) => { await repositories.library.moveLexemes(deck.id, targetId, selected); await finishAction() }} />}
+    </>
+  }
+  return <><button className="button button-primary mb-4 w-full" onClick={() => setCreate(true)}><Plus /> Новая колода</button>{library.data.decks.length ? <div className="grid gap-3">{library.data.decks.map((item) => <LibraryTile key={item.id} deck={item} onActions={() => setActionsDeck(item)} />)}</div> : <EmptyState title="Колод пока нет" text="Создайте первую колоду и сохраняйте в неё слова из словаря." />}{create && <DeckDialog onClose={() => setCreate(false)} />}{editingDeck && <DeckDialog deck={editingDeck} onClose={() => setEditingDeck(null)} />}{actionsDeck && <DeckActionsDialog deck={actionsDeck} onClose={() => setActionsDeck(null)} onEdit={() => { setActionsDeck(null); setEditingDeck(actionsDeck) }} onDelete={async () => { if (confirm(`Удалить колоду «${actionsDeck.title}» и слова в ней (${actionsDeck.wordIds.length})?`)) { await repositories.library.remove(actionsDeck.id); await refresh(); setActionsDeck(null) } }} />}</>
 }
 
 function LegacyLibraryRedirect() {
@@ -198,19 +214,29 @@ function LegacyLibraryRedirect() {
   return <Navigate to={`/library/${deckId}`} replace />
 }
 
-function LibraryTile({ emoji, title, subtitle, to, onDelete }: { emoji: string; title: string; subtitle: string; to: string; onDelete(): void }) {
-  return <div className="card flex items-center gap-3 p-3"><Link to={to} className="flex min-w-0 flex-1 items-center gap-3 text-inherit no-underline"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--accent-soft)] text-2xl">{emoji}</span><div><h2 className="font-extrabold">{title}</h2><p className="muted text-xs">{subtitle}</p></div><ChevronRight className="muted ml-auto" /></Link><button className="button button-ghost icon-button" aria-label={`Удалить ${title}`} onClick={onDelete}><Trash2 size={18} /></button></div>
+function LibraryTile({ deck, onActions }: { deck: Deck; onActions(): void }) {
+  return <div className="card flex items-center gap-3 p-3"><Link to={`/library/${deck.id}`} className="flex min-w-0 flex-1 items-center gap-3 text-inherit no-underline"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--accent-soft)] text-2xl">{deck.emoji}</span><div><h2 className="font-extrabold">{deck.title}</h2><p className="muted text-xs">{deck.wordIds.length} слов</p></div><ChevronRight className="muted ml-auto" /></Link><button className="button button-ghost icon-button" aria-label={`Действия с колодой ${deck.title}`} onClick={onActions}><EllipsisVertical size={20} /></button></div>
 }
 
-function CreateDialog({ onClose }: { onClose(): void }) {
-  const [value, setValue] = useState(''); const queryClient = useQueryClient()
-  const submit = async (event: FormEvent) => { event.preventDefault(); if (!value.trim()) return; await repositories.library.createDeck(value.trim()); await queryClient.invalidateQueries({ queryKey: queryKeys.library }); onClose() }
-  return <Dialog title="Новая колода" onClose={onClose}><form onSubmit={submit}><label className="eyebrow" htmlFor="create-title">Название</label><input id="create-title" autoFocus className="input mt-2" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Например: Путешествия" /><button className="button button-primary mt-4 w-full" disabled={!value.trim()}>Создать</button></form></Dialog>
+function DeckActionsDialog({ deck, onClose, onEdit, onDelete }: { deck: Deck; onClose(): void; onEdit(): void; onDelete(): void }) {
+  return <Dialog title={`${deck.emoji} ${deck.title}`} onClose={onClose}><div className="grid gap-2"><button className="button button-secondary justify-start" onClick={onEdit}><Pencil size={18} /> Редактировать</button><button className="button justify-start bg-rose-50 text-rose-700" onClick={onDelete}><Trash2 size={18} /> Удалить</button></div></Dialog>
+}
+
+const deckEmojis = ['✨', '📚', '⭐', '🧠', '✈️', '🍽️', '🏃', '👋']
+
+function DeckDialog({ deck, onClose }: { deck?: Deck; onClose(): void }) {
+  const [title, setTitle] = useState(deck?.title ?? ''); const [emoji, setEmoji] = useState(deck?.emoji ?? '✨'); const queryClient = useQueryClient()
+  const submit = async (event: FormEvent) => { event.preventDefault(); if (!title.trim()) return; if (deck) await repositories.library.updateDeck(deck.id, { title, emoji }); else await repositories.library.createDeck(title.trim(), emoji.trim() || '✨'); await queryClient.invalidateQueries({ queryKey: queryKeys.library }); onClose() }
+  return <Dialog title={deck ? 'Редактировать колоду' : 'Новая колода'} onClose={onClose}><form onSubmit={submit}><label className="eyebrow" htmlFor="deck-title">Название</label><input id="deck-title" autoFocus className="input mt-2" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Например: Путешествия" /><label className="eyebrow mt-4 block" htmlFor="deck-emoji">Эмодзи</label><input id="deck-emoji" className="input mt-2 text-center text-2xl" value={emoji} maxLength={8} onChange={(event) => setEmoji(event.target.value)} /><div className="emoji-presets mt-3">{deckEmojis.map((item) => <button type="button" className="emoji-choice" key={item} aria-label={`Выбрать ${item}`} aria-pressed={emoji === item} onClick={() => setEmoji(item)}>{item}</button>)}</div><button className="button button-primary mt-5 w-full" disabled={!title.trim()}>{deck ? 'Сохранить' : 'Создать'}</button></form></Dialog>
+}
+
+function MoveWordsDialog({ decks, count, onClose, onCreate, onMove }: { decks: Deck[]; count: number; onClose(): void; onCreate(): void; onMove(deckId: string): void }) {
+  return <Dialog title={`Переместить слова (${count})`} onClose={onClose}>{decks.length ? <div className="grid gap-2">{decks.map((deck) => <button className="button button-secondary justify-between" key={deck.id} onClick={() => onMove(deck.id)}><span>{deck.emoji} {deck.title}</span><ChevronRight size={18} /></button>)}</div> : <div className="text-center"><p className="muted text-sm">Для перемещения нужна ещё одна колода.</p><button className="button button-primary mt-4 w-full" onClick={onCreate}><Plus size={18} /> Создать колоду</button></div>}</Dialog>
 }
 
 function Training() {
   const training = useStartTraining()
-  return <><section className="card overflow-hidden p-6 text-white" style={{ background: 'linear-gradient(145deg, var(--accent), #1e3a8a)' }}><p className="eyebrow !text-blue-100">Сегодня</p><h2 className="mt-2 text-2xl font-black">{training.isReady ? training.queueSize : '…'} слов ждут<br />повторения</h2><button className="button mt-6 w-full bg-white text-blue-700" onClick={() => training.start('review')} disabled={!training.isReady || training.isPending}>Начать повторение</button></section><h2 className="mb-3 mt-7 text-xl font-extrabold">Свободная практика</h2><div className="grid gap-3">{([{ mode: 'study', icon: <BookOpen />, title: 'Изучение новых', text: 'Слово, перевод и детали' }, { mode: 'flip', icon: <RotateCcw />, title: 'Флип-карточки', text: 'Вспомните перевод' }, { mode: 'quiz', icon: <CircleHelp />, title: 'Тест на знание', text: 'Быстрая самопроверка' }] as const).map((item) => <button key={item.mode} className="card flex items-center gap-4 p-4 text-left" onClick={() => training.start(item.mode)} disabled={!training.isReady || training.isPending}><span className="soft-bg accent grid h-12 w-12 place-items-center rounded-2xl">{item.icon}</span><span className="flex-1"><strong className="block">{item.title}</strong><span className="muted text-xs">{item.text}</span></span><ChevronRight className="muted" /></button>)}</div></>
+  return <><section className="card overflow-hidden p-6 text-white" style={{ background: 'linear-gradient(145deg, var(--accent), #1e3a8a)' }}><p className="eyebrow !text-blue-100">Сегодня</p><h2 className="mt-2 text-2xl font-black">{training.isReady ? training.queueSize : '…'} слов ждут<br />повторения</h2><button className="button mt-6 w-full bg-white text-blue-700" onClick={() => training.start('review')} disabled={!training.isReady || training.isPending}>Начать повторение</button></section><h2 className="mb-3 mt-7 text-xl font-extrabold">Свободная практика</h2><div className="grid gap-3">{([{ mode: 'study', icon: <BookOpen />, title: 'Изучение новых', text: 'Слово, перевод и детали' }, { mode: 'flip', icon: <RotateCcw />, title: 'Тренировка', text: 'Вспомните перевод' }] as const).map((item) => <button key={item.mode} className="card flex items-center gap-4 p-4 text-left" onClick={() => training.start(item.mode)} disabled={!training.isReady || training.isPending}><span className="soft-bg accent grid h-12 w-12 place-items-center rounded-2xl">{item.icon}</span><span className="flex-1"><strong className="block">{item.title}</strong><span className="muted text-xs">{item.text}</span></span><ChevronRight className="muted" /></button>)}</div></>
 }
 
 function TrainingSessionPage() {

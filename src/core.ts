@@ -101,9 +101,11 @@ export interface LexemeRepository {
 export interface LibraryRepository {
   get(): Promise<LibraryState>
   createDeck(title: string, emoji?: string): Promise<Deck>
-  rename(id: string, title: string): Promise<void>
+  updateDeck(id: string, patch: Pick<Deck, 'title' | 'emoji'>): Promise<Deck>
   remove(id: string): Promise<void>
   toggleLexeme(deckId: string, lexemeId: string): Promise<boolean>
+  removeLexemes(deckId: string, lexemeIds: string[]): Promise<void>
+  moveLexemes(sourceDeckId: string, targetDeckId: string, lexemeIds: string[]): Promise<void>
 }
 export interface ReviewRepository {
   start(mode: TrainingMode, lexemeIds: string[]): Promise<TrainingSession>
@@ -157,9 +159,15 @@ class LocalLibraryRepository implements LibraryRepository {
     const state = await this.get(); const deck = { id: makeId('deck'), title, emoji, wordIds: [] }
     state.decks.push(deck); this.save(state); return deck
   }
-  async rename(id: string, title: string) {
-    const state = await this.get(); const item = state.decks.find((entry) => entry.id === id)
-    if (item) item.title = title; this.save(state)
+  async updateDeck(id: string, patch: Pick<Deck, 'title' | 'emoji'>) {
+    const state = await this.get(); const deck = state.decks.find((entry) => entry.id === id)
+    if (!deck) throw new Error('Колода не найдена')
+    const title = patch.title.trim()
+    if (!title) throw new Error('Введите название колоды')
+    deck.title = title
+    deck.emoji = patch.emoji.trim() || '✨'
+    this.save(state)
+    return deck
   }
   async remove(id: string) {
     const state = await this.get()
@@ -172,6 +180,26 @@ class LocalLibraryRepository implements LibraryRepository {
     const saved = !deck.wordIds.includes(lexemeId)
     deck.wordIds = saved ? [...deck.wordIds, lexemeId] : deck.wordIds.filter((id) => id !== lexemeId)
     this.save(state); return saved
+  }
+  async removeLexemes(deckId: string, lexemeIds: string[]) {
+    const state = await this.get(); const deck = state.decks.find((entry) => entry.id === deckId)
+    if (!deck) throw new Error('Колода не найдена')
+    const removing = new Set(lexemeIds)
+    deck.wordIds = deck.wordIds.filter((id) => !removing.has(id))
+    this.save(state)
+  }
+  async moveLexemes(sourceDeckId: string, targetDeckId: string, lexemeIds: string[]) {
+    const state = await this.get()
+    const source = state.decks.find((entry) => entry.id === sourceDeckId)
+    const target = state.decks.find((entry) => entry.id === targetDeckId)
+    if (!source) throw new Error('Исходная колода не найдена')
+    if (!target) throw new Error('Целевая колода не найдена')
+    if (source.id === target.id) throw new Error('Выберите другую колоду')
+    const selected = new Set(lexemeIds)
+    const moving = source.wordIds.filter((id) => selected.has(id))
+    source.wordIds = source.wordIds.filter((id) => !selected.has(id))
+    target.wordIds = [...new Set([...target.wordIds, ...moving])]
+    this.save(state)
   }
 }
 
