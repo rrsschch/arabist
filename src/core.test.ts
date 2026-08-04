@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { buildTrainingQueue, hasDetails, lexemeSchema, migrateLibraryState, posLabels, repositories, resetDemoData, type Lexeme } from './core'
+import { buildTrainingQueue, calculateRubberBandOffset, hasDetails, lexemeSchema, LocalUserLexemeRepository, migrateLibraryState, posLabels, repositories, resetDemoData, userLexemeSchema, type Lexeme } from './core'
 
 const particle: Lexeme = {
   id: 'e56d27ff-9b5a-5a52-b90f-02e5233e711b',
@@ -82,5 +82,50 @@ describe('flat deck library', () => {
     const source = await repositories.library.createDeck('Источник')
     await expect(repositories.library.moveLexemes(source.id, 'missing', ['one'])).rejects.toThrow('Целевая колода не найдена')
     await expect(repositories.library.moveLexemes('missing', source.id, ['one'])).rejects.toThrow('Исходная колода не найдена')
+  })
+})
+
+describe('personal lexemes', () => {
+  beforeEach(() => resetDemoData())
+
+  it('stores validated words and phrases separately for each user', async () => {
+    const repository = new LocalUserLexemeRepository()
+    repository.setUserKey('telegram-101')
+    const word = await repository.create({ kind: 'word', word_ar: ' كِتَاب ', translation: ' книга ', pos: 'noun', example: 'هذا كتاب', note: 'Повторить' })
+    expect(userLexemeSchema.parse(word)).toMatchObject({ word_ar: 'كِتَاب', translations: ['книга'], pos: 'noun', kind: 'word' })
+    repository.setUserKey('telegram-202')
+    expect(await repository.list()).toEqual([])
+    await repository.create({ kind: 'phrase', word_ar: 'كيف حالك؟', translation: 'Как дела?' })
+    repository.setUserKey('telegram-101')
+    expect((await repository.list()).map((entry) => entry.id)).toEqual([word.id])
+  })
+
+  it('updates and removes personal entries without touching the public dictionary storage', async () => {
+    const repository = new LocalUserLexemeRepository(); repository.setUserKey('demo')
+    const created = await repository.create({ kind: 'word', word_ar: 'بَيْت', translation: 'дом' })
+    const updated = await repository.update(created.id, { kind: 'phrase', word_ar: 'في البيت', translation: 'дома', note: 'Фраза' })
+    expect(updated).toMatchObject({ kind: 'phrase', word_ar: 'في البيت', pos: null, note: 'Фраза' })
+    expect(localStorage.getItem('sanna.mock.v2.lexemes')).toBeNull()
+    await repository.remove(created.id)
+    expect(await repository.list()).toEqual([])
+  })
+
+  it('removes a deleted personal entry from every deck', async () => {
+    const first = await repositories.library.createDeck('Первая')
+    const second = await repositories.library.createDeck('Вторая')
+    await repositories.library.toggleLexeme(first.id, 'personal-id')
+    await repositories.library.toggleLexeme(second.id, 'personal-id')
+    await repositories.library.removeLexemeEverywhere('personal-id')
+    expect((await repositories.library.get()).decks.filter((deck) => [first.id, second.id].includes(deck.id)).every((deck) => deck.wordIds.length === 0)).toBe(true)
+  })
+})
+
+describe('rubber-band motion', () => {
+  it('caps edge feedback and preserves Telegram top gestures', () => {
+    expect(calculateRubberBandOffset(40, true, false, false)).toBe(4.8)
+    expect(calculateRubberBandOffset(200, true, false, false)).toBe(10)
+    expect(calculateRubberBandOffset(80, true, false, true)).toBe(0)
+    expect(calculateRubberBandOffset(-200, false, true, true)).toBe(-10)
+    expect(calculateRubberBandOffset(30, false, false, false)).toBe(0)
   })
 })

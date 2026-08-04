@@ -17,7 +17,7 @@ type TelegramWebApp = {
   onEvent(event: string, callback: () => void): void
   offEvent(event: string, callback: () => void): void
   BackButton: { show(): void; hide(): void; onClick(callback: () => void): void; offClick(callback: () => void): void }
-  HapticFeedback?: { impactOccurred(style: 'light' | 'medium' | 'heavy'): void }
+  HapticFeedback?: { impactOccurred(style: 'light' | 'medium' | 'heavy'): void; selectionChanged?(): void }
 }
 
 declare global { interface Window { Telegram?: { WebApp?: TelegramWebApp } } }
@@ -28,11 +28,12 @@ interface TelegramContextValue {
   colorScheme: 'light' | 'dark'
   user: { id: number; firstName: string; username?: string; photoUrl?: string }
   haptic(): void
+  selectionHaptic(): void
 }
 
 const fallbackUser = { id: 0, firstName: 'Ученик' }
 const TelegramContext = createContext<TelegramContextValue>({
-  app: null, isTelegram: false, colorScheme: 'light', user: fallbackUser, haptic() {},
+  app: null, isTelegram: false, colorScheme: 'light', user: fallbackUser, haptic() {}, selectionHaptic() {},
 })
 
 function applyInsets(app: TelegramWebApp) {
@@ -114,6 +115,7 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
     colorScheme,
     user: rawUser ? { id: rawUser.id, firstName: rawUser.first_name, username: rawUser.username, photoUrl: rawUser.photo_url } : fallbackUser,
     haptic: () => app?.HapticFeedback?.impactOccurred('light'),
+    selectionHaptic: () => app?.HapticFeedback?.selectionChanged?.(),
   }), [app, colorScheme, isTelegram, rawUser])
   return <TelegramContext.Provider value={value}>{children}</TelegramContext.Provider>
 }
