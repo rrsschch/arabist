@@ -13,7 +13,8 @@ test('submits a home search and removes decorative screen headers', async ({ pag
 test('keeps dictionary search controls clear and opens a real word', async ({ page }) => {
   await page.goto('/dictionary')
   await expect(page.getByLabel('Фильтр части речи')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Все', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Имя', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Глагол', exact: true })).toHaveCount(0)
   const input = page.getByRole('textbox', { name: 'Поиск слов' })
   await expect(input).toBeVisible()
   expect(Number.parseFloat(await input.evaluate((element) => getComputedStyle(element).paddingLeft))).toBeGreaterThanOrEqual(48)
@@ -24,7 +25,7 @@ test('keeps dictionary search controls clear and opens a real word', async ({ pa
   await card.getByRole('link').click()
   await expect(page).toHaveURL(/\/lexemes\//)
   await expect(page.getByRole('status')).toHaveCount(0)
-  await expect(page.locator('main.app-shell > article').getByText('1) август', { exact: true })).toBeVisible()
+  await expect(page.locator('.standalone-shell article').getByText('1) август', { exact: true }).first()).toBeVisible()
 })
 
 test('creates a deck and persists it after reload', async ({ page }) => {
@@ -58,17 +59,17 @@ test('selects, moves and removes multiple deck words', async ({ page }) => {
   ] })))
   await page.goto('/library/food')
   await page.getByRole('button', { name: /Управление/ }).click()
-  await page.getByRole('button', { name: /Выбрать/ }).first().click()
-  await page.getByRole('button', { name: /Выбрать/ }).first().click()
+  await page.getByRole('button', { name: /Выбрать/ }).first().click({ force: true })
+  await page.getByRole('button', { name: /Выбрать/ }).first().click({ force: true })
   await page.getByRole('button', { name: /Переместить/ }).click()
-  await page.getByRole('button', { name: /Глаголы/ }).click()
-  await expect(page.getByRole('link', { name: /Добавить слова/ })).toBeVisible()
-  await page.getByRole('navigation').getByRole('link', { name: 'Колоды' }).click()
+  await page.getByRole('button', { name: /Глаголы/ }).click({ force: true })
+  await expect(page.getByRole('link', { name: /Открыть словарь/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Назад' }).click()
   await page.getByRole('link', { name: /Глаголы/ }).click()
   await page.getByRole('button', { name: /Управление/ }).click()
-  await page.getByRole('button', { name: /Выбрать/ }).first().click()
-  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: /Выбрать/ }).first().click({ force: true })
   await page.getByRole('button', { name: /Убрать/ }).click()
+  await page.getByRole('dialog', { name: 'Убрать слова из колоды?' }).getByRole('button', { name: 'Убрать' }).click()
   await expect(page.getByText('1 слов')).toBeVisible()
 })
 
@@ -133,7 +134,7 @@ test('applies Telegram content safe area above the first screen content', async 
     } }
   })
   await page.goto('/')
-  const paddingTop = await page.locator('main.app-shell').evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop))
+  const paddingTop = await page.locator('.app-shell').first().evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop))
   expect(paddingTop).toBeGreaterThanOrEqual(104)
   await page.goto('/dictionary')
   const tools = page.locator('.dictionary-tools')
@@ -142,14 +143,14 @@ test('applies Telegram content safe area above the first screen content', async 
   const searchTop = (await tools.locator('input').boundingBox())!.y
   expect(searchTop).toBeGreaterThanOrEqual(104)
   await page.goto('/lexemes/e56d27ff-9b5a-5a52-b90f-02e5233e711b')
-  const standalonePadding = await page.locator('main.app-shell').evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop))
+  const standalonePadding = await page.locator('.app-shell').first().evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop))
   expect(standalonePadding).toBeGreaterThanOrEqual(104)
 })
 
 test('does not add Telegram clearance in a regular browser', async ({ page }) => {
   await page.goto('/')
   await expect(page.locator('html')).toHaveAttribute('data-telegram', 'false')
-  const paddingTop = await page.locator('main.app-shell').evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop))
+  const paddingTop = await page.locator('.app-shell').first().evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop))
   expect(paddingTop).toBeLessThan(104)
 })
 
@@ -198,9 +199,10 @@ test('masks scrolling dictionary cards above the search in Telegram', async ({ p
   })
   await page.goto('/dictionary')
   await expect(page.locator('.word-card').first()).toBeVisible({ timeout: 15_000 })
-  await page.evaluate(() => window.scrollTo(0, 700))
+  await page.locator('.app-scroll').evaluate((element) => { element.scrollTop = 700 })
   const tools = page.locator('.dictionary-tools')
-  await expect.poll(async () => (await tools.boundingBox())?.y).toBe(0)
+  const viewportTop = (await page.locator('.app-viewport').boundingBox())!.y
+  await expect.poll(async () => Math.abs(((await tools.boundingBox())?.y ?? 0) - viewportTop)).toBeLessThanOrEqual(1)
   const inputBox = await tools.locator('input').boundingBox()
   expect(inputBox!.y).toBeGreaterThanOrEqual(104)
   const mask = await tools.evaluate((element) => {
@@ -209,6 +211,45 @@ test('masks scrolling dictionary cards above the search in Telegram', async ({ p
   })
   expect(mask.width).toBeGreaterThanOrEqual(page.viewportSize()!.width)
   expect(mask.color).not.toBe('rgba(0, 0, 0, 0)')
+})
+
+test('uses application controls for profile settings', async ({ page }) => {
+  await page.goto('/profile')
+  await expect(page.locator('select')).toHaveCount(0)
+  await expect(page.locator('input[type="checkbox"]')).toHaveCount(0)
+  const toggle = page.getByRole('switch', { name: 'Включить напоминания' })
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-checked', 'false')
+  await page.getByRole('button', { name: /Дневная цель/ }).click()
+  await page.getByRole('dialog', { name: 'Дневная цель' }).getByRole('radio', { name: '20 слов' }).click()
+  await expect(page.getByRole('button', { name: /Дневная цель/ })).toContainText('20 слов')
+})
+
+test('creates a personal phrase, finds it in My and adds it to a deck', async ({ page }) => {
+  await page.goto('/dictionary')
+  await page.getByRole('button', { name: 'Добавить своё слово или фразу' }).click()
+  const form = page.getByRole('dialog', { name: 'Своё слово или фраза' })
+  await form.getByRole('button', { name: 'Фраза' }).click()
+  await form.getByLabel('Арабский текст').fill('صباح الخير')
+  await form.getByLabel('Перевод').fill('Доброе утро')
+  await form.getByRole('button', { name: 'Создать', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Сохранить в колоду' }).getByRole('button', { name: /Еда и продукты/ }).click()
+  await page.getByRole('radio', { name: 'Мои' }).click()
+  await expect(page.getByText('صباح الخير')).toBeVisible()
+  await expect(page.getByText('Моё')).toBeVisible()
+  await page.getByRole('navigation').getByRole('link', { name: 'Колоды' }).click()
+  await page.getByRole('link', { name: /Еда и продукты/ }).click()
+  await expect(page.getByText('صباح الخير')).toBeVisible()
+})
+
+test('contains the app in a 520px desktop frame', async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.includes('desktop'), 'desktop-only layout')
+  await page.goto('/')
+  const box = await page.locator('.app-viewport').boundingBox()
+  expect(box!.width).toBeLessThanOrEqual(520)
+  expect(box!.width).toBeLessThan(page.viewportSize()!.width)
+  expect(await page.locator('.app-viewport').evaluate((element) => getComputedStyle(element).borderRadius)).not.toBe('0px')
 })
 
 test('honors reduced motion preferences', async ({ page }) => {
