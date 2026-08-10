@@ -153,16 +153,29 @@ button, a { touch-action: manipulation; }
   border: 2px solid var(--border); border-radius: .65rem; color: white; background: var(--surface);
 }
 .word-card[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft), var(--surface) 35%); }
-.word-card[aria-pressed="true"] .selection-check { border-color: var(--accent); background: var(--accent); }
+.manage-word-row { display: grid; grid-template-columns: minmax(0, 1fr) 48px; align-items: center; gap: 10px; }
+.manage-word-card { grid-template-columns: 1fr; }
+.manage-checkbox {
+  width: 34px; height: 34px; justify-self: end; border-radius: .7rem; color: white;
+  transition: transform var(--motion-fast), border-color var(--motion-fast), background var(--motion-fast);
+}
+.manage-checkbox[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); box-shadow: 0 8px 20px color-mix(in srgb, var(--accent), transparent 72%); }
+.manage-checkbox:active { transform: scale(.92); }
 .selection-bar {
   position: absolute; z-index: 45; left: 50%; transform: translateX(-50%);
   bottom: calc(94px + var(--app-safe-bottom)); width: min(calc(100% - 24px), 520px);
-  display: grid; grid-template-columns: auto 1fr 1fr; align-items: center; gap: 8px;
-  padding: 10px; border: 1px solid var(--border); border-radius: 1.35rem;
-  background: color-mix(in srgb, var(--surface), transparent 4%); box-shadow: 0 16px 40px rgba(15, 23, 42, .2); backdrop-filter: blur(18px);
+  display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 8px;
+  padding: 12px; border: 1px solid color-mix(in srgb, var(--border), white 22%); border-radius: 1.55rem;
+  background: color-mix(in srgb, var(--surface), transparent 7%); box-shadow: 0 16px 40px rgba(15, 23, 42, .16); backdrop-filter: blur(18px);
   animation: panel-enter var(--motion-base) var(--motion-ease) both;
 }
-.selection-bar .button:disabled { opacity: .38; }
+.selection-action {
+  min-height: 82px; border: 0; border-radius: 1.15rem; background: transparent; color: var(--accent);
+  display: grid; place-items: center; align-content: center; gap: 8px; font-weight: 750;
+  transition: transform var(--motion-fast), background var(--motion-fast), opacity var(--motion-fast);
+}
+.selection-action:active { transform: scale(.97); background: var(--accent-soft); }
+.selection-action:disabled { opacity: .32; }
 .emoji-presets { display: flex; flex-wrap: wrap; gap: .5rem; }
 .emoji-choice { width: 44px; height: 44px; border: 1px solid var(--border); border-radius: .9rem; background: var(--surface-muted); font-size: 1.35rem; }
 .emoji-choice[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
@@ -178,11 +191,15 @@ button, a { touch-action: manipulation; }
 .lexeme-audio-button { justify-self: start; }
 .lexeme-save-button { justify-self: end; }
 .lexeme-word { margin: 0; min-width: 0; font-size: clamp(2.75rem, 15vw, 4.5rem); font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.lexeme-word-medium { font-size: clamp(2.3rem, 11vw, 3.4rem); line-height: 1.35; }
+.lexeme-word-long { font-size: clamp(1.8rem, 8.5vw, 2.7rem); line-height: 1.45; }
 .bookmark-button svg, .lexeme-save-button svg { transition: transform var(--motion-fast) var(--motion-ease), color var(--motion-fast), fill var(--motion-fast); }
 .bookmark-button.saved, .lexeme-save-button.saved { color: var(--accent); }
 .bookmark-button.saved svg, .lexeme-save-button.saved svg { fill: currentColor; }
 .bookmark-button:active svg, .lexeme-save-button:active svg { transform: scale(.86); }
 .example-card { overflow-wrap: anywhere; }
+.example-arabic { font-size: clamp(1.35rem, 6vw, 1.55rem); line-height: 1.9; }
+.example-translation { font-size: .96rem; line-height: 1.65; }
 .phrase-input { min-height: 112px; line-height: 1.8; }
 .training-progress { transition: width var(--motion-base) var(--motion-ease); }
 .training-answer, .training-grades { animation: answer-enter var(--motion-base) var(--motion-ease) both; }
