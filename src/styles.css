@@ -146,6 +146,8 @@ button, a { touch-action: manipulation; }
 :root[data-keyboard-open="true"] .bottom-nav { display: none; }
 .word-list { display: grid; gap: 12px; }
 .word-card { color: inherit; text-decoration: none; padding: 1rem; display: grid; grid-template-columns: 1fr auto; gap: .8rem; }
+.word-row-arabic { font-size: clamp(2rem, 9vw, 2.5rem); line-height: 1.25; overflow-wrap: anywhere; }
+.word-row-translations { display: grid; gap: .18rem; color: var(--text); }
 .selection-check {
   width: 28px; height: 28px; align-self: center; display: grid; place-items: center;
   border: 2px solid var(--border); border-radius: .65rem; color: white; background: var(--surface);
@@ -160,6 +162,7 @@ button, a { touch-action: manipulation; }
   background: color-mix(in srgb, var(--surface), transparent 4%); box-shadow: 0 16px 40px rgba(15, 23, 42, .2); backdrop-filter: blur(18px);
   animation: panel-enter var(--motion-base) var(--motion-ease) both;
 }
+.selection-bar .button:disabled { opacity: .38; }
 .emoji-presets { display: flex; flex-wrap: wrap; gap: .5rem; }
 .emoji-choice { width: 44px; height: 44px; border: 1px solid var(--border); border-radius: .9rem; background: var(--surface-muted); font-size: 1.35rem; }
 .emoji-choice[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
@@ -175,8 +178,12 @@ button, a { touch-action: manipulation; }
 .lexeme-audio-button { justify-self: start; }
 .lexeme-save-button { justify-self: end; }
 .lexeme-word { margin: 0; min-width: 0; font-size: clamp(2.75rem, 15vw, 4.5rem); font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
-.lexeme-save-button svg { transition: transform var(--motion-fast) var(--motion-ease), color var(--motion-fast), fill var(--motion-fast); }
-.lexeme-save-button:active svg { transform: scale(.86); }
+.bookmark-button svg, .lexeme-save-button svg { transition: transform var(--motion-fast) var(--motion-ease), color var(--motion-fast), fill var(--motion-fast); }
+.bookmark-button.saved, .lexeme-save-button.saved { color: var(--accent); }
+.bookmark-button.saved svg, .lexeme-save-button.saved svg { fill: currentColor; }
+.bookmark-button:active svg, .lexeme-save-button:active svg { transform: scale(.86); }
+.example-card { overflow-wrap: anywhere; }
+.phrase-input { min-height: 112px; line-height: 1.8; }
 .training-progress { transition: width var(--motion-base) var(--motion-ease); }
 .training-answer, .training-grades { animation: answer-enter var(--motion-base) var(--motion-ease) both; }
 .dialog-backdrop {
@@ -202,6 +209,11 @@ button, a { touch-action: manipulation; }
 .app-choice[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .choice-row { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: .75rem 1rem; border-radius: 1rem; }
 .choice-row[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.app-slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
+.app-slider::-webkit-slider-runnable-track { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--accent), var(--border) 72%); }
+.app-slider::-webkit-slider-thumb { appearance: none; width: 28px; height: 28px; margin-top: -10px; border-radius: 50%; background: var(--accent); box-shadow: 0 4px 14px color-mix(in srgb, var(--accent), transparent 62%); }
+.app-slider::-moz-range-track { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--accent), var(--border) 72%); }
+.app-slider::-moz-range-thumb { width: 28px; height: 28px; border: 0; border-radius: 50%; background: var(--accent); box-shadow: 0 4px 14px color-mix(in srgb, var(--accent), transparent 62%); }
 .danger-button { background: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
 .training-stage { min-height: calc(100dvh - 170px); }
 .dialog {
