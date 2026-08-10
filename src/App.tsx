@@ -2,14 +2,14 @@ import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, ty
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeft, BarChart3, Bell, Bookmark, BookOpen, Check, ChevronRight, CircleHelp, EllipsisVertical,
+  ArrowLeft, BarChart3, Bell, Bookmark, Check, ChevronRight, CircleHelp, EllipsisVertical,
   Home as HomeIcon, Library as LibraryIcon, ListChecks, LoaderCircle, Moon, MoveRight, Pencil, Plus,
   RotateCcw, Search, Settings, Sparkles, Sun, Trash2, UserRound, Volume2, X, Zap,
 } from 'lucide-react'
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
-  buildTrainingQueue, calculateRubberBandOffset, genderLabels, hasDetails, posLabels, repositories, resetDemoData,
-  type Accent, type CatalogLexeme, type Deck, type PartOfSpeech, type Profile, type ReviewGrade,
+  buildDeckTrainingQueue, buildTrainingQueue, calculateRubberBandOffset, genderLabels, hasDetails, posLabels, repositories, resetDemoData,
+  type Accent, type CatalogLexeme, type Deck, type Profile, type ReviewGrade,
   type ThemePreference, type TrainingMode, type UserLexeme, type UserLexemeInput,
 } from './core'
 import { useTelegram, useTelegramBack } from './telegram'
@@ -118,14 +118,16 @@ function useStartTraining() {
   const library = useQuery({ queryKey: queryKeys.library, queryFn: () => repositories.library.get() })
   const queue = lexemes.data && library.data ? buildTrainingQueue(library.data, lexemes.data) : []
   const mutation = useMutation({
-    mutationFn: (mode: TrainingMode) => repositories.reviews.start(mode, queue),
+    mutationFn: ({ mode, lexemeIds }: { mode: TrainingMode; lexemeIds?: string[] }) => repositories.reviews.start(mode, lexemeIds ?? queue),
     onSuccess: (session) => navigate(`/training/session/${session.id}`),
   })
   return {
-    start: mutation.mutate,
+    start: (mode: TrainingMode, lexemeIds?: string[]) => mutation.mutate({ mode, lexemeIds }),
     isPending: mutation.isPending,
     isReady: Boolean(lexemes.data && library.data && queue.length),
     queueSize: queue.length,
+    lexemes: lexemes.data ?? [],
+    library: library.data,
   }
 }
 
@@ -165,6 +167,7 @@ function Dictionary() {
   const [source, setSource] = useState<'all' | 'user'>('all')
   const [saveWord, setSaveWord] = useState<CatalogLexeme | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const library = useQuery({ queryKey: queryKeys.library, queryFn: () => repositories.library.get() })
   useEffect(() => {
     const timer = setTimeout(() => setParams((old) => {
       const next = new URLSearchParams(old)
@@ -178,24 +181,28 @@ function Dictionary() {
   const results = useQuery({ queryKey: ['search', query, source], queryFn: () => repositories.lexemes.search({ query, source, limit: 100 }) })
   return <>
     <div className="dictionary-tools">
-      <div className="flex gap-2"><label className="search-field flex-1"><span className="sr-only">Поиск слов</span><Search className="search-field-icon muted" size={20} /><input className="input search-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Слово, перевод или корень…" />{query && <button className="button button-ghost icon-button search-field-clear" aria-label="Очистить поиск" onClick={() => setQuery('')}><X size={19} /></button>}</label><button className="button button-primary icon-button shrink-0" aria-label="Добавить своё слово или фразу" onClick={() => setCreateOpen(true)}><Plus /></button></div>
+      <div className="flex gap-2"><label className="search-field flex-1"><span className="sr-only">Поиск слов</span><Search className="search-field-icon muted" size={20} /><input className="input search-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Слово, перевод или корень…" />{query && <button className="button button-ghost icon-button search-field-clear" aria-label="Очистить поиск" onClick={() => setQuery('')}><X size={19} /></button>}</label><button className="button button-primary icon-button shrink-0" aria-label="Добавить свою фразу" onClick={() => setCreateOpen(true)}><Plus /></button></div>
       <div className="source-switch mt-3" role="radiogroup" aria-label="Источник слов"><button role="radio" aria-checked={source === 'all'} onClick={() => setSource('all')}>Все</button><button role="radio" aria-checked={source === 'user'} onClick={() => setSource('user')}>Мои</button></div>
     </div>
-    {results.isPending ? <LoadingState label="Открываем словарь…" /> : results.isError ? <ErrorState error={results.error} /> : results.data.length === 0 ? <><EmptyState title={source === 'user' ? 'Своих слов пока нет' : 'Ничего не найдено'} text={source === 'user' ? 'Добавьте первое слово или фразу для личных тренировок.' : 'Попробуйте слово без огласовок или другой перевод.'} />{source === 'user' && <button className="button button-primary mt-4 w-full" onClick={() => setCreateOpen(true)}><Plus /> Добавить запись</button>}</> : <div className="word-list">{results.data.map((word) => <WordRow key={word.id} word={word} onSave={() => setSaveWord(word)} />)}</div>}
+    {results.isPending ? <LoadingState label="Открываем словарь…" /> : results.isError ? <ErrorState error={results.error} /> : results.data.length === 0 ? <><EmptyState title={source === 'user' ? 'Своих фраз пока нет' : 'Ничего не найдено'} text={source === 'user' ? 'Добавьте первую фразу для личных тренировок.' : 'Попробуйте слово без огласовок или другой перевод.'} />{source === 'user' && <button className="button button-primary mt-4 w-full" onClick={() => setCreateOpen(true)}><Plus /> Добавить фразу</button>}</> : <div className="word-list">{results.data.map((word) => <WordRow key={word.id} word={word} saved={isSaved(library.data, word.id)} onSave={() => setSaveWord(word)} />)}</div>}
     {saveWord && <SaveDialog word={saveWord} onClose={() => setSaveWord(null)} />}
     {createOpen && <PersonalLexemeDialog onClose={() => setCreateOpen(false)} onSaved={(word) => { setCreateOpen(false); setSaveWord({ ...word, source: 'user' }) }} />}
   </>
 }
 
-function WordRow({ word, onSave, selected = false, onSelect }: { word: CatalogLexeme; onSave?: () => void; selected?: boolean; onSelect?: () => void }) {
-  const content = <><div className="flex flex-wrap items-center gap-2">{word.pos ? <span className={`pos-badge pos-${word.pos}`}>{posLabels[word.pos]}</span> : <span className="pos-badge pos-personal">{word.kind === 'phrase' ? 'фраза' : 'слово'}</span>}{word.source === 'user' && <span className="personal-badge">Моё</span>}{word.details.root && <span className="muted font-arabic text-sm" dir="rtl">{word.details.root}</span>}</div><p className="font-arabic mt-2 text-right text-4xl font-bold" dir="rtl">{word.word_ar}</p><p className="mt-2 line-clamp-2 text-sm font-semibold">{word.translations.join('; ')}</p></>
+function WordRow({ word, onSave, saved = false, selected = false, onSelect }: { word: CatalogLexeme; onSave?: () => void; saved?: boolean; selected?: boolean; onSelect?: () => void }) {
+  const content = <><div className="flex flex-wrap items-center gap-2">{word.pos ? <span className={`pos-badge pos-${word.pos}`}>{posLabels[word.pos]}</span> : <span className="pos-badge pos-personal">фраза</span>}{word.source === 'user' && <span className="personal-badge">Моё</span>}{word.details.root && <span className="muted font-arabic text-sm" dir="rtl">{word.details.root}</span>}</div><p className="font-arabic word-row-arabic mt-2 text-right font-bold" dir="rtl">{word.word_ar}</p><div className="word-row-translations mt-2">{word.translations.slice(0, 3).map((translation, index) => <p className="line-clamp-1 text-sm font-semibold" key={index}>{translation}</p>)}</div></>
   if (onSelect) return <button className="card word-card w-full text-left" aria-pressed={selected} aria-label={`${selected ? 'Снять выбор' : 'Выбрать'} ${word.word_ar}`} onClick={onSelect}><span className="min-w-0">{content}</span><span className="selection-check">{selected && <Check size={17} />}</span></button>
-  return <article className="card word-card"><Link to={`/lexemes/${word.id}`} className="min-w-0 text-inherit no-underline">{content}</Link>{onSave && <button className="button button-ghost icon-button self-center" aria-label={`Сохранить ${word.word_ar}`} onClick={onSave}><Bookmark size={21} /></button>}</article>
+  return <article className="card word-card"><Link to={`/lexemes/${word.id}`} className="min-w-0 text-inherit no-underline">{content}</Link>{onSave && <button className={`button button-ghost icon-button self-center bookmark-button${saved ? ' saved' : ''}`} aria-pressed={saved} aria-label={`Сохранить ${word.word_ar}`} onClick={onSave}><Bookmark size={21} /></button>}</article>
+}
+
+function isSaved(library: { decks: Deck[] } | undefined, lexemeId: string) {
+  return Boolean(library?.decks.some((deck) => deck.wordIds.includes(lexemeId)))
 }
 
 function SaveDialog({ word, onClose }: { word: CatalogLexeme; onClose(): void }) {
   const queryClient = useQueryClient(); const navigate = useNavigate(); const library = useQuery({ queryKey: queryKeys.library, queryFn: () => repositories.library.get() })
-  const mutation = useMutation({ mutationFn: (deckId: string) => repositories.library.toggleLexeme(deckId, word.id), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: queryKeys.library }); onClose() } })
+  const mutation = useMutation({ mutationFn: (deckId: string) => repositories.library.addLexeme(deckId, word.id), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: queryKeys.library }); onClose() } })
   const decks = library.data?.decks ?? []
   return <Dialog title="Сохранить в колоду" onClose={onClose}><p className="font-arabic mb-4 text-center text-5xl" dir="rtl">{word.word_ar}</p>{decks.length ? <div className="grid gap-2">{decks.map((deck) => <button className="button button-secondary justify-between" key={deck.id} onClick={() => mutation.mutate(deck.id)}><span>{deck.emoji} {deck.title}</span>{deck.wordIds.includes(word.id) && <Check size={18} />}</button>)}</div> : <div className="text-center"><p className="muted text-sm">Сначала создайте колоду для сохранения слов.</p><button className="button button-primary mt-4 w-full" onClick={() => { onClose(); navigate('/library') }}>Перейти к колодам</button></div>}</Dialog>
 }
@@ -203,20 +210,30 @@ function SaveDialog({ word, onClose }: { word: CatalogLexeme; onClose(): void })
 function LexemeDetail() {
   const { id = '' } = useParams(); const navigate = useNavigate(); const queryClient = useQueryClient(); const [saveOpen, setSaveOpen] = useState(false); const [editOpen, setEditOpen] = useState(false); const [deleteOpen, setDeleteOpen] = useState(false)
   const word = useQuery({ queryKey: ['lexeme', id], queryFn: () => repositories.lexemes.get(id) })
+  const library = useQuery({ queryKey: queryKeys.library, queryFn: () => repositories.library.get() })
   const goBack = useCallback(() => navigate(-1), [navigate]); useTelegramBack(true, goBack)
   if (word.isPending) return <Standalone><LoadingState /></Standalone>
   if (word.isError) return <Standalone><ErrorState error={word.error} /></Standalone>
   if (!word.data) return <Navigate to="/dictionary" replace />
   const item = word.data
+  const saved = isSaved(library.data, item.id)
   return <Standalone>
     <div className="mb-4"><button className="button button-ghost icon-button" onClick={goBack} aria-label="Назад"><ArrowLeft /></button></div>
-    <article className="card p-6 text-center"><div className="flex justify-between"><div className="text-left"><span className="eyebrow">{item.source === 'user' ? 'Личная запись' : 'Корень'}</span><p className="font-arabic mt-1 text-xl" dir="rtl">{item.source === 'user' ? (item.kind === 'phrase' ? 'Фраза' : 'Слово') : item.details.root ?? '—'}</p></div>{item.pos ? <span className={`pos-badge pos-${item.pos} self-start`}>{posLabels[item.pos]}</span> : <span className="personal-badge self-start">Моё</span>}</div><div className="lexeme-word-actions"><button className="button button-ghost icon-button lexeme-audio-button" disabled aria-label="Озвучивание пока недоступно" title="Озвучивание скоро"><Volume2 /></button><p className="font-arabic lexeme-word" dir="rtl">{item.word_ar}</p><button className="button button-ghost icon-button lexeme-save-button" onClick={() => setSaveOpen(true)} aria-label="Сохранить слово"><Bookmark /></button></div><div className="my-4 h-px bg-[var(--border)]" /><ul className="grid gap-2 text-left">{item.translations.map((translation, index) => <li className="rounded-xl bg-[var(--surface-muted)] p-3 text-sm font-semibold" key={index}>{translation}</li>)}</ul>{item.note && <p className="muted mt-4 rounded-xl border border-[var(--border)] p-3 text-left text-sm">{item.note}</p>}{item.source === 'user' && <div className="mt-4 grid grid-cols-2 gap-2"><button className="button button-secondary" onClick={() => setEditOpen(true)}><Pencil size={17} /> Изменить</button><button className="button danger-button" onClick={() => setDeleteOpen(true)}><Trash2 size={17} /> Удалить</button></div>}</article>
+    <article className="card p-6 text-center"><div className="flex justify-between"><div className="text-left"><span className="eyebrow">{item.source === 'user' ? 'Личная запись' : 'Корень'}</span><p className="font-arabic mt-1 text-xl" dir="rtl">{item.source === 'user' ? 'Фраза' : item.details.root ?? '—'}</p></div>{item.pos ? <span className={`pos-badge pos-${item.pos} self-start`}>{posLabels[item.pos]}</span> : <span className="personal-badge self-start">Моё</span>}</div><div className="lexeme-word-actions"><button className="button button-ghost icon-button lexeme-audio-button" disabled aria-label="Озвучивание пока недоступно" title="Озвучивание скоро"><Volume2 /></button><p className="font-arabic lexeme-word" dir="rtl">{item.word_ar}</p><button className={`button button-ghost icon-button lexeme-save-button bookmark-button${saved ? ' saved' : ''}`} aria-pressed={saved} onClick={() => setSaveOpen(true)} aria-label="Сохранить слово"><Bookmark /></button></div><div className="my-4 h-px bg-[var(--border)]" /><ul className="grid gap-2 text-left">{item.translations.map((translation, index) => <li className="rounded-xl bg-[var(--surface-muted)] p-3 text-sm font-semibold" key={index}>{translation}</li>)}</ul>{item.note && <p className="muted mt-4 rounded-xl border border-[var(--border)] p-3 text-left text-sm">{item.note}</p>}{item.source === 'user' && <div className="mt-4 grid grid-cols-2 gap-2"><button className="button button-secondary" onClick={() => setEditOpen(true)}><Pencil size={17} /> Изменить</button><button className="button danger-button" onClick={() => setDeleteOpen(true)}><Trash2 size={17} /> Удалить</button></div>}</article>
     {hasDetails(item) && <section className="card mt-4 p-5"><h2 className="text-lg font-extrabold">{item.pos === 'verb' ? 'Формы глагола' : item.pos === 'noun' ? 'Сведения об имени' : 'Дополнение'}</h2><div className="mt-4 grid grid-cols-2 gap-3">{detailRows(item).map(([label, value]) => <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-center" key={label}><span className="eyebrow">{label}</span><p className="font-arabic mt-1 text-xl font-bold" dir={/[\u0600-\u06ff]/.test(value) ? 'rtl' : undefined}>{value}</p></div>)}</div></section>}
-    <section className="mt-4"><h2 className="mb-3 text-lg font-extrabold">Примеры</h2>{item.examples.length ? <div className="grid gap-3">{item.examples.map((example, index) => <p key={index} className="card p-4 text-sm leading-7">{example}</p>)}</div> : <EmptyState title="Примеров пока нет" text="Они появятся после расширения словарной базы." />}</section>
+    <section className="mt-4"><h2 className="mb-3 text-lg font-extrabold">Примеры</h2>{item.examples.length ? <div className="grid gap-3">{item.examples.map((example, index) => <ExampleCard example={example} key={index} />)}</div> : <EmptyState title="Примеров пока нет" text="Они появятся после расширения словарной базы." />}</section>
     {saveOpen && <SaveDialog word={item} onClose={() => setSaveOpen(false)} />}
     {editOpen && item.source === 'user' && <PersonalLexemeDialog entry={item} onClose={() => setEditOpen(false)} onSaved={(saved) => { queryClient.setQueryData(['lexeme', id], { ...saved, source: 'user' }); queryClient.invalidateQueries({ queryKey: queryKeys.lexemes }); queryClient.invalidateQueries({ queryKey: ['search'] }); setEditOpen(false) }} />}
     {deleteOpen && <ConfirmDialog title="Удалить личную запись?" text={`«${item.word_ar}» исчезнет из всех колод и будущих тренировок.`} confirmLabel="Удалить" destructive onClose={() => setDeleteOpen(false)} onConfirm={async () => { await repositories.userLexemes.remove(item.id); await repositories.library.removeLexemeEverywhere(item.id); await Promise.all([queryClient.invalidateQueries({ queryKey: queryKeys.lexemes }), queryClient.invalidateQueries({ queryKey: queryKeys.library }), queryClient.invalidateQueries({ queryKey: ['search'] })]); navigate('/dictionary') }} />}
   </Standalone>
+}
+
+function ExampleCard({ example }: { example: string }) {
+  const lines = example.split(/\n+|(?:\s*[—–-]\s*)/).map((line) => line.trim()).filter(Boolean)
+  const arabic = lines.find((line) => /[\u0600-\u06ff]/.test(line))
+  const rest = lines.filter((line) => line !== arabic)
+  if (!arabic) return <p className="card example-card whitespace-pre-line p-4 text-sm leading-7">{example}</p>
+  return <article className="card example-card p-4"><p className="font-arabic text-right text-2xl leading-10" dir="rtl">{arabic}</p>{rest.length > 0 && <p className="muted mt-3 whitespace-pre-line text-sm leading-6">{rest.join('\n')}</p>}</article>
 }
 
 function detailRows(word: CatalogLexeme): [string, string][] {
@@ -249,9 +266,9 @@ function Library() {
     const finishAction = async () => { await refresh(); setSelected([]); setManaging(false); setMoveOpen(false) }
     return <>
       <div className="mb-5 flex items-center gap-3"><button className="button button-ghost icon-button" onClick={closeDeck} aria-label={managing ? 'Завершить управление' : 'Назад'}><ArrowLeft /></button><div className="min-w-0 flex-1"><h1 className="truncate text-xl font-extrabold">{deck.emoji} {deck.title}</h1><p className="muted text-xs">{deck.wordIds.length} слов</p></div>{deck.wordIds.length > 0 && <button className="button button-secondary" onClick={() => { setManaging((value) => !value); setSelected([]) }}><ListChecks size={18} /> {managing ? 'Готово' : 'Управление'}</button>}</div>
-      <button className="button button-secondary mb-4 w-full" onClick={() => setPersonalOpen(true)}><Plus size={18} /> Добавить своё слово или фразу</button>
-      {deck.wordIds.length && words.data ? <div className="word-list">{deckWords.map((word) => <WordRow key={word.id} word={word} selected={selected.includes(word.id)} onSelect={managing ? () => toggleSelected(word.id) : undefined} />)}</div> : <><EmptyState title="Колода пустая" text="Добавьте слова из словаря или создайте личную запись." /><Link className="button button-primary mt-4 w-full no-underline" to="/dictionary"><Search size={18} /> Открыть словарь</Link></>}
-      {managing && selected.length > 0 && <><div className="h-28" /><div className="selection-bar" role="toolbar" aria-label="Действия с выбранными словами"><strong className="px-2 text-sm">{selected.length}</strong><button className="button button-secondary" onClick={() => setMoveOpen(true)}><MoveRight size={17} /> Переместить</button><button className="button danger-button" onClick={() => setConfirmRemove(true)}><Trash2 size={17} /> Убрать</button></div></>}
+      <button className="button button-secondary mb-4 w-full" onClick={() => setPersonalOpen(true)}><Plus size={18} /> Добавить свою фразу</button>
+      {deck.wordIds.length && words.data ? <div className="word-list">{deckWords.map((word) => <WordRow key={word.id} word={word} selected={selected.includes(word.id)} onSelect={managing ? () => toggleSelected(word.id) : undefined} />)}</div> : <><EmptyState title="Колода пустая" text="Добавьте слова из словаря или создайте личную фразу." /><Link className="button button-primary mt-4 w-full no-underline" to="/dictionary"><Search size={18} /> Открыть словарь</Link></>}
+      {managing && <><div className="h-28" /><div className="selection-bar" role="toolbar" aria-label="Действия с выбранными словами"><strong className="px-2 text-sm">{selected.length} выбрано</strong><button className="button button-secondary" disabled={selected.length === 0} onClick={() => setMoveOpen(true)}><MoveRight size={17} /> Переместить</button><button className="button danger-button" disabled={selected.length === 0} onClick={() => setConfirmRemove(true)}><Trash2 size={17} /> Убрать</button></div></>}
       {moveOpen && <MoveWordsDialog decks={otherDecks} count={selected.length} onClose={() => setMoveOpen(false)} onCreate={() => { setMoveOpen(false); setManaging(false); setSelected([]); navigate('/library') }} onMove={async (targetId) => { await repositories.library.moveLexemes(deck.id, targetId, selected); await finishAction() }} />}
       {personalOpen && <PersonalLexemeDialog deckId={deck.id} onClose={() => setPersonalOpen(false)} onSaved={() => { setPersonalOpen(false); queryClient.invalidateQueries({ queryKey: queryKeys.lexemes }); refresh() }} />}
       {confirmRemove && <ConfirmDialog title="Убрать слова из колоды?" text={`Выбранные записи (${selected.length}) останутся в словаре и других колодах.`} confirmLabel="Убрать" destructive onClose={() => setConfirmRemove(false)} onConfirm={async () => { await repositories.library.removeLexemes(deck.id, selected); setConfirmRemove(false); await finishAction() }} />}
@@ -262,29 +279,23 @@ function Library() {
 
 function PersonalLexemeDialog({ entry, deckId, onClose, onSaved }: { entry?: UserLexeme; deckId?: string; onClose(): void; onSaved?(entry: UserLexeme): void }) {
   const queryClient = useQueryClient()
-  const [kind, setKind] = useState<UserLexemeInput['kind']>(entry?.kind ?? 'word')
   const [wordAr, setWordAr] = useState(entry?.word_ar ?? '')
   const [translation, setTranslation] = useState(entry?.translations[0] ?? '')
-  const [pos, setPos] = useState<PartOfSpeech | null>(entry?.pos ?? null)
-  const [example, setExample] = useState(entry?.examples[0] ?? '')
   const [note, setNote] = useState(entry?.note ?? '')
   const [error, setError] = useState('')
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setError('')
     try {
-      const input = { kind, word_ar: wordAr, translation, pos: kind === 'phrase' ? null : pos, example, note }
+      const input: UserLexemeInput = { kind: 'phrase', word_ar: wordAr, translation, note }
       const saved = entry ? await repositories.userLexemes.update(entry.id, input) : await repositories.userLexemes.create(input)
-      if (!entry && deckId) await repositories.library.toggleLexeme(deckId, saved.id)
+      if (!entry && deckId) await repositories.library.addLexeme(deckId, saved.id)
       await Promise.all([queryClient.invalidateQueries({ queryKey: queryKeys.lexemes }), queryClient.invalidateQueries({ queryKey: queryKeys.userLexemes }), queryClient.invalidateQueries({ queryKey: queryKeys.library }), queryClient.invalidateQueries({ queryKey: ['search'] })])
       onSaved?.(saved); if (!onSaved) onClose()
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось сохранить запись') }
   }
-  return <Dialog title={entry ? 'Редактировать запись' : 'Своё слово или фраза'} onClose={onClose}><form onSubmit={submit} className="grid gap-4">
-    <AppChoices label="Тип записи" value={kind} options={[['word', 'Слово'], ['phrase', 'Фраза']]} onChange={(value) => setKind(value as UserLexemeInput['kind'])} />
-    <label><span className="eyebrow">Арабский текст</span><input className="input font-arabic mt-2 text-right text-xl" dir="rtl" value={wordAr} onChange={(event) => setWordAr(event.target.value)} placeholder="كِتَاب" autoFocus /></label>
-    <label><span className="eyebrow">Перевод</span><input className="input mt-2" value={translation} onChange={(event) => setTranslation(event.target.value)} placeholder="Книга" /></label>
-    {kind === 'word' && <AppChoices label="Часть речи — необязательно" value={pos ?? 'none'} options={[['none', 'Не указана'], ['noun', 'Имя'], ['verb', 'Глагол'], ['particle', 'Частица']]} onChange={(value) => setPos(value === 'none' ? null : value as PartOfSpeech)} />}
-    <label><span className="eyebrow">Пример — необязательно</span><textarea className="input textarea mt-2" value={example} onChange={(event) => setExample(event.target.value)} /></label>
+  return <Dialog title={entry ? 'Редактировать фразу' : 'Своя фраза'} onClose={onClose}><form onSubmit={submit} className="grid gap-4">
+    <label><span className="eyebrow">Арабская фраза</span><textarea className="input textarea phrase-input font-arabic mt-2 text-right text-xl" dir="rtl" value={wordAr} onChange={(event) => setWordAr(event.target.value)} placeholder="كَيْفَ حَالُكَ؟" autoFocus /></label>
+    <label><span className="eyebrow">Перевод</span><input className="input mt-2" value={translation} onChange={(event) => setTranslation(event.target.value)} placeholder="Как дела?" /></label>
     <label><span className="eyebrow">Личная заметка — необязательно</span><textarea className="input textarea mt-2" value={note} onChange={(event) => setNote(event.target.value)} /></label>
     {error && <p className="text-sm font-semibold text-rose-600" role="alert">{error}</p>}
     <button className="button button-primary w-full" disabled={!wordAr.trim() || !translation.trim()}>{entry ? 'Сохранить изменения' : deckId ? 'Создать и добавить' : 'Создать'}</button>
@@ -297,7 +308,7 @@ function LegacyLibraryRedirect() {
 }
 
 function LibraryTile({ deck, onActions }: { deck: Deck; onActions(): void }) {
-  return <div className="card flex items-center gap-3 p-3"><Link to={`/library/${deck.id}`} className="flex min-w-0 flex-1 items-center gap-3 text-inherit no-underline"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--accent-soft)] text-2xl">{deck.emoji}</span><div><h2 className="font-extrabold">{deck.title}</h2><p className="muted text-xs">{deck.wordIds.length} слов</p></div><ChevronRight className="muted ml-auto" /></Link><button className="button button-ghost icon-button" aria-label={`Действия с колодой ${deck.title}`} onClick={onActions}><EllipsisVertical size={20} /></button></div>
+  return <div className="card flex items-center gap-3 p-3"><Link to={`/library/${deck.id}`} className="flex min-w-0 flex-1 items-center gap-3 text-inherit no-underline"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--accent-soft)] text-2xl">{deck.emoji}</span><div className="min-w-0"><h2 className="truncate font-extrabold">{deck.title}</h2><p className="muted text-xs">{deck.wordIds.length} слов</p></div></Link><button className="button button-ghost icon-button" aria-label={`Действия с колодой ${deck.title}`} onClick={onActions}><EllipsisVertical size={20} /></button></div>
 }
 
 function DeckActionsDialog({ deck, onClose, onEdit, onDelete }: { deck: Deck; onClose(): void; onEdit(): void; onDelete(): void }) {
@@ -318,7 +329,16 @@ function MoveWordsDialog({ decks, count, onClose, onCreate, onMove }: { decks: D
 
 function Training() {
   const training = useStartTraining()
-  return <><section className="card overflow-hidden p-6 text-white" style={{ background: 'linear-gradient(145deg, var(--accent), #1e3a8a)' }}><p className="eyebrow !text-blue-100">Сегодня</p><h2 className="mt-2 text-2xl font-black">{training.isReady ? training.queueSize : '…'} слов ждут<br />повторения</h2><button className="button mt-6 w-full bg-white text-blue-700" onClick={() => training.start('review')} disabled={!training.isReady || training.isPending}>Начать повторение</button></section><h2 className="mb-3 mt-7 text-xl font-extrabold">Свободная практика</h2><div className="grid gap-3">{([{ mode: 'study', icon: <BookOpen />, title: 'Изучение новых', text: 'Слово, перевод и детали' }, { mode: 'flip', icon: <RotateCcw />, title: 'Тренировка', text: 'Вспомните перевод' }] as const).map((item) => <button key={item.mode} className="card flex items-center gap-4 p-4 text-left" onClick={() => training.start(item.mode)} disabled={!training.isReady || training.isPending}><span className="soft-bg accent grid h-12 w-12 place-items-center rounded-2xl">{item.icon}</span><span className="flex-1"><strong className="block">{item.title}</strong><span className="muted text-xs">{item.text}</span></span><ChevronRight className="muted" /></button>)}</div></>
+  const [deckChoiceOpen, setDeckChoiceOpen] = useState(false)
+  return <><section className="card overflow-hidden p-6 text-white" style={{ background: 'linear-gradient(145deg, var(--accent), #1e3a8a)' }}><p className="eyebrow !text-blue-100">Сегодня</p><h2 className="mt-2 text-2xl font-black">{training.isReady ? training.queueSize : '…'} слов ждут<br />повторения</h2><button className="button mt-6 w-full bg-white text-blue-700" onClick={() => training.start('review')} disabled={!training.isReady || training.isPending}>Начать повторение</button></section><h2 className="mb-3 mt-7 text-xl font-extrabold">Свободная практика</h2><div className="grid gap-3"><button className="card flex items-center gap-4 p-4 text-left" onClick={() => setDeckChoiceOpen(true)} disabled={!training.library?.decks.length || training.isPending}><span className="soft-bg accent grid h-12 w-12 place-items-center rounded-2xl"><RotateCcw /></span><span className="flex-1"><strong className="block">Тренировка</strong><span className="muted text-xs">Выберите колоду и вспомните перевод</span></span><ChevronRight className="muted" /></button></div>{deckChoiceOpen && <TrainingDeckDialog decks={training.library?.decks ?? []} lexemes={training.lexemes} onClose={() => setDeckChoiceOpen(false)} onStart={(deck, queue) => { setDeckChoiceOpen(false); training.start('flip', queue) }} />}</>
+}
+
+function TrainingDeckDialog({ decks, lexemes, onClose, onStart }: { decks: Deck[]; lexemes: CatalogLexeme[]; onClose(): void; onStart(deck: Deck, queue: string[]): void }) {
+  const navigate = useNavigate()
+  return <Dialog title="Выберите колоду" onClose={onClose}><div className="grid gap-2">{decks.map((deck) => {
+    const queue = buildDeckTrainingQueue(deck, lexemes)
+    return <button className="button button-secondary justify-between" key={deck.id} disabled={queue.length === 0} onClick={() => onStart(deck, queue)}><span>{deck.emoji} {deck.title}</span><span className="muted text-sm">{queue.length} слов</span></button>
+  })}</div>{decks.every((deck) => buildDeckTrainingQueue(deck, lexemes).length === 0) && <div className="mt-4 text-center"><p className="muted text-sm">В колодах пока нет слов для тренировки.</p><button className="button button-primary mt-4 w-full" onClick={() => { onClose(); navigate('/dictionary') }}><Search size={18} /> Открыть словарь</button></div>}</Dialog>
 }
 
 function TrainingSessionPage() {
@@ -347,28 +367,30 @@ function GradeButton({ label, grade, className, onClick }: { label: string; grad
 
 function ProfilePage() {
   const queryClient = useQueryClient(); const { user, isTelegram } = useTelegram(); const profile = useQuery({ queryKey: queryKeys.profile, queryFn: () => repositories.profile.get() })
-  const [goalOpen, setGoalOpen] = useState(false); const [themeOpen, setThemeOpen] = useState(false); const [resetOpen, setResetOpen] = useState(false)
+  const library = useQuery({ queryKey: queryKeys.library, queryFn: () => repositories.library.get() })
+  const reviewStats = useQuery({ queryKey: ['review-stats'], queryFn: () => repositories.reviews.stats() })
+  const [themeOpen, setThemeOpen] = useState(false); const [resetOpen, setResetOpen] = useState(false)
   const update = useMutation({ mutationFn: (patch: Partial<Profile>) => repositories.profile.update(patch), onSuccess: (next) => queryClient.setQueryData(queryKeys.profile, next) })
   if (profile.isPending) return <LoadingState />; if (profile.isError) return <ErrorState error={profile.error} />
   const value = profile.data
-  return <><section className="card flex items-center gap-4 p-5">{user.photoUrl ? <img src={user.photoUrl} className="h-16 w-16 rounded-full object-cover" alt="" /> : <span className="accent-bg grid h-16 w-16 place-items-center rounded-full text-2xl font-black">{user.firstName[0]}</span>}<div><h2 className="text-xl font-black">{user.firstName || value.name}</h2><p className="muted text-sm">{user.username ? `@${user.username}` : isTelegram ? 'Данные из Telegram' : 'Режим предпросмотра'}</p></div></section><div className="mt-4 grid grid-cols-3 gap-2">{[['Серия', `${value.streak} дн.`], ['Повторено', value.reviewedTotal], ['Цель', value.dailyGoal]].map(([label, stat]) => <div className="card p-3 text-center" key={label}><strong className="block text-lg">{stat}</strong><span className="muted text-[10px] uppercase">{label}</span></div>)}</div>
+  const studied = new Set(library.data?.decks.flatMap((deck) => deck.wordIds) ?? []).size
+  return <><section className="card flex items-center gap-4 p-5">{user.photoUrl ? <img src={user.photoUrl} className="h-16 w-16 rounded-full object-cover" alt="" /> : <span className="accent-bg grid h-16 w-16 place-items-center rounded-full text-2xl font-black">{user.firstName[0]}</span>}<div><h2 className="text-xl font-black">{user.firstName || value.name}</h2><p className="muted text-sm">{user.username ? `@${user.username}` : isTelegram ? 'Данные из Telegram' : 'Режим предпросмотра'}</p></div></section><div className="mt-4 grid grid-cols-3 gap-2">{[['Изучено', studied], ['Выучено', reviewStats.data?.learned ?? 0], ['В колодах', library.data?.decks.length ?? 0]].map(([label, stat]) => <div className="card p-3 text-center" key={label}><strong className="block text-lg">{stat}</strong><span className="muted text-[10px] uppercase">{label}</span></div>)}</div>
     <section className="card mt-5 divide-y divide-[var(--border)] p-2">
       <SettingRow icon={<Bell />} label="Напоминания"><AppSwitch checked={value.notifications} onChange={(checked) => update.mutate({ notifications: checked })} label="Включить напоминания" /></SettingRow>
-      <SettingButton icon={<BarChart3 />} label="Дневная цель" value={`${value.dailyGoal} слов`} onClick={() => setGoalOpen(true)} />
+      <GoalSlider value={value.dailyGoal} onChange={(dailyGoal) => update.mutate({ dailyGoal })} />
       <SettingButton icon={value.theme === 'dark' ? <Moon /> : <Sun />} label="Тема" value={{ telegram: 'Telegram', light: 'Светлая', dark: 'Тёмная' }[value.theme]} onClick={() => setThemeOpen(true)} />
     </section>
     <section className="card mt-5 p-5"><h2 className="flex items-center gap-2 font-extrabold"><Settings size={19} /> Цветовой акцент</h2><div className="mt-4 flex justify-between">{(['blue', 'emerald', 'purple', 'rose', 'amber'] as Accent[]).map((accent) => <button key={accent} onClick={() => update.mutate({ accent })} className="accent-choice" style={{ background: accentColor(accent) }} aria-label={`Акцент ${accent}`} aria-pressed={value.accent === accent}>{value.accent === accent && <Check className="mx-auto text-white" size={18} />}</button>)}</div></section>
     <button className="button button-secondary mt-5 w-full" onClick={() => setResetOpen(true)}><RotateCcw size={18} /> Сбросить демо-данные</button>
-    {goalOpen && <ChoiceDialog title="Дневная цель" value={String(value.dailyGoal)} options={['10', '20', '30', '50'].map((goal) => [goal, `${goal} слов`])} onClose={() => setGoalOpen(false)} onChange={(goal) => { update.mutate({ dailyGoal: Number(goal) }); setGoalOpen(false) }} />}
     {themeOpen && <ChoiceDialog title="Тема интерфейса" value={value.theme} options={[['telegram', 'Как в Telegram'], ['light', 'Светлая'], ['dark', 'Тёмная']]} onClose={() => setThemeOpen(false)} onChange={(theme) => { update.mutate({ theme: theme as ThemePreference }); setThemeOpen(false) }} />}
     {resetOpen && <ConfirmDialog title="Сбросить демо-данные?" text="Будут удалены локальные колоды, личные слова, настройки и прогресс." confirmLabel="Сбросить" destructive onClose={() => setResetOpen(false)} onConfirm={() => { resetDemoData(); location.reload() }} />}
   </>
 }
 
 function SettingRow({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) { return <div className="flex min-h-15 items-center gap-3 px-3 py-2"><span className="accent">{icon}</span><span className="flex-1 font-bold">{label}</span>{children}</div> }
+function GoalSlider({ value, onChange }: { value: number; onChange(value: number): void }) { return <div className="px-3 py-4"><div className="mb-3 flex items-center gap-3"><span className="accent"><BarChart3 /></span><span className="flex-1 font-bold">Дневная цель</span><strong className="accent">{value} слов</strong></div><input className="app-slider" type="range" min="0" max="100" step="5" value={value} aria-label="Дневная цель от 0 до 100 слов" onChange={(event) => onChange(Number(event.target.value))} /><div className="muted mt-2 flex justify-between text-xs font-bold"><span>0</span><span>50</span><span>100</span></div></div> }
 function SettingButton({ icon, label, value, onClick }: { icon: ReactNode; label: string; value: string; onClick(): void }) { return <button className="setting-button" onClick={onClick}><span className="accent">{icon}</span><span className="flex-1 text-left font-bold">{label}</span><span className="muted text-sm font-semibold">{value}</span><ChevronRight className="muted" size={18} /></button> }
 function AppSwitch({ checked, onChange, label }: { checked: boolean; onChange(value: boolean): void; label: string }) { return <button type="button" className="app-switch" role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)}><span /></button> }
-function AppChoices({ label, value, options, onChange }: { label: string; value: string; options: [string, string][]; onChange(value: string): void }) { return <fieldset><legend className="eyebrow mb-2">{label}</legend><div className="app-choices">{options.map(([id, text]) => <button type="button" key={id} className="app-choice" aria-pressed={value === id} onClick={() => onChange(id)}>{text}{value === id && <Check size={16} />}</button>)}</div></fieldset> }
 function ChoiceDialog({ title, value, options, onClose, onChange }: { title: string; value: string; options: [string, string][]; onClose(): void; onChange(value: string): void }) { return <Dialog title={title} onClose={onClose}><div className="grid gap-2" role="radiogroup" aria-label={title}>{options.map(([id, label]) => <button className="choice-row" role="radio" aria-checked={value === id} key={id} onClick={() => onChange(id)}><span>{label}</span>{value === id && <Check size={18} />}</button>)}</div></Dialog> }
 function accentColor(accent: Accent) { return { blue: '#2563eb', emerald: '#059669', purple: '#7c3aed', rose: '#e11d48', amber: '#d97706' }[accent] }
 

@@ -155,6 +155,7 @@ export interface LibraryRepository {
   createDeck(title: string, emoji?: string): Promise<Deck>
   updateDeck(id: string, patch: Pick<Deck, 'title' | 'emoji'>): Promise<Deck>
   remove(id: string): Promise<void>
+  addLexeme(deckId: string, lexemeId: string): Promise<void>
   toggleLexeme(deckId: string, lexemeId: string): Promise<boolean>
   removeLexemes(deckId: string, lexemeIds: string[]): Promise<void>
   moveLexemes(sourceDeckId: string, targetDeckId: string, lexemeIds: string[]): Promise<void>
@@ -165,10 +166,12 @@ export interface ReviewRepository {
   get(id: string): Promise<TrainingSession | null>
   answer(id: string, lexemeId: string, grade: ReviewGrade): Promise<TrainingSession>
   skipMissing(id: string, lexemeId: string): Promise<TrainingSession>
+  stats(): Promise<ReviewStats>
 }
 export interface ProfileRepository { get(): Promise<Profile>; update(patch: Partial<Profile>): Promise<Profile> }
 export interface AuthGateway { exchangeTelegramInitData(initData: string): Promise<{ id: number; firstName: string }> }
 export interface AudioRepository { getUrl(lexemeId: string): Promise<string | null> }
+export interface ReviewStats { learned: number }
 
 class StaticLexemeRepository {
   private cache?: Promise<Lexeme[]>
@@ -200,14 +203,17 @@ export class LocalUserLexemeRepository implements UserLexemeRepository {
     try { return userLexemeListSchema.parse(JSON.parse(localStorage.getItem(this.storageKey()) ?? '[]')) }
     catch { return [] }
   }
+  private normalize(entry: UserLexeme): UserLexeme {
+    return { ...entry, kind: 'phrase', pos: null, examples: [] }
+  }
   private write(value: UserLexeme[]) { localStorage.setItem(this.storageKey(), JSON.stringify(value)) }
-  async list() { return this.read() }
-  async get(id: string) { return this.read().find((entry) => entry.id === id) ?? null }
+  async list() { return this.read().map((entry) => this.normalize(entry)) }
+  async get(id: string) { return (await this.list()).find((entry) => entry.id === id) ?? null }
   async create(input: UserLexemeInput) {
     const values = validateUserLexemeInput(input); const now = new Date().toISOString()
     const entry: UserLexeme = {
-      id: crypto.randomUUID(), kind: values.kind, word_ar: values.word_ar, pos: values.pos, subtype: null,
-      translations: [values.translation], examples: values.example ? [values.example] : [], details: emptyDetails(),
+      id: crypto.randomUUID(), kind: 'phrase', word_ar: values.word_ar, pos: null, subtype: null,
+      translations: [values.translation], examples: [], details: emptyDetails(),
       note: values.note || null, createdAt: now, updatedAt: now,
     }
     this.write([...this.read(), entry]); return entry
@@ -216,8 +222,8 @@ export class LocalUserLexemeRepository implements UserLexemeRepository {
     const values = validateUserLexemeInput(input); const entries = this.read(); const index = entries.findIndex((entry) => entry.id === id)
     if (index < 0) throw new Error('Личная запись не найдена')
     const updated: UserLexeme = {
-      ...entries[index], kind: values.kind, word_ar: values.word_ar, pos: values.pos,
-      translations: [values.translation], examples: values.example ? [values.example] : [],
+      ...entries[index], kind: 'phrase', word_ar: values.word_ar, pos: null,
+      translations: [values.translation], examples: [],
       note: values.note || null, updatedAt: new Date().toISOString(),
     }
     entries[index] = updated; this.write(entries); return updated
@@ -227,9 +233,9 @@ export class LocalUserLexemeRepository implements UserLexemeRepository {
 
 function validateUserLexemeInput(input: UserLexemeInput) {
   const word_ar = input.word_ar.trim(); const translation = input.translation.trim()
-  if (!word_ar) throw new Error('Введите слово или фразу на арабском')
+  if (!word_ar) throw new Error('Введите фразу на арабском')
   if (!translation) throw new Error('Введите перевод')
-  return { kind: input.kind, word_ar, translation, pos: input.pos ?? null, example: input.example?.trim() ?? '', note: input.note?.trim() ?? '' }
+  return { kind: 'phrase' as const, word_ar, translation, pos: null, example: '', note: input.note?.trim() ?? '' }
 }
 
 class CombinedLexemeRepository implements LexemeRepository {
@@ -297,6 +303,12 @@ class LocalLibraryRepository implements LibraryRepository {
     deck.wordIds = saved ? [...deck.wordIds, lexemeId] : deck.wordIds.filter((id) => id !== lexemeId)
     this.save(state); return saved
   }
+  async addLexeme(deckId: string, lexemeId: string) {
+    const state = await this.get(); const deck = state.decks.find((d) => d.id === deckId)
+    if (!deck) throw new Error('Колода не найдена')
+    if (!deck.wordIds.includes(lexemeId)) deck.wordIds = [...deck.wordIds, lexemeId]
+    this.save(state)
+  }
   async removeLexemes(deckId: string, lexemeIds: string[]) {
     const state = await this.get(); const deck = state.decks.find((entry) => entry.id === deckId)
     if (!deck) throw new Error('Колода не найдена')
@@ -351,6 +363,17 @@ export function buildTrainingQueue(library: LibraryState, lexemes: Array<Pick<Le
   return (saved.length ? saved : lexemes.map((word) => word.id)).slice(0, limit)
 }
 
+export function buildDeckTrainingQueue(deck: Pick<Deck, 'wordIds'>, lexemes: Array<Pick<Lexeme, 'id'>>, limit = 20) {
+  const available = new Set(lexemes.map((word) => word.id))
+  return [...new Set(deck.wordIds)].filter((id) => available.has(id)).slice(0, limit)
+}
+
+export function buildProfileLearningStats(library: LibraryState, sessions: Record<string, TrainingSession>) {
+  const studied = new Set(library.decks.flatMap((deck) => deck.wordIds)).size
+  const learned = new Set(Object.values(sessions).flatMap((session) => session.answers.filter((answer) => answer.grade === 'easy').map((answer) => answer.lexemeId))).size
+  return { studied, learned, deckCount: library.decks.length }
+}
+
 class LocalReviewRepository implements ReviewRepository {
   async start(mode: TrainingMode, lexemeIds: string[]) {
     const session: TrainingSession = { id: makeId('session'), mode, lexemeIds, cursor: 0, answers: [], completed: lexemeIds.length === 0 }
@@ -372,6 +395,10 @@ class LocalReviewRepository implements ReviewRepository {
     if (session.lexemeIds[session.cursor] === lexemeId) session.cursor += 1
     session.completed = session.cursor >= session.lexemeIds.length
     sessions[id] = session; write('sessions', sessions); return session
+  }
+  async stats() {
+    const sessions = read<Record<string, TrainingSession>>('sessions', {})
+    return { learned: buildProfileLearningStats(read('library', defaultLibrary), sessions).learned }
   }
 }
 

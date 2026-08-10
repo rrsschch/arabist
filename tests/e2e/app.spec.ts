@@ -106,6 +106,17 @@ test('shows Training without flip-card and quiz blocks', async ({ page }) => {
   await expect(page.getByText('Тест на знание')).toHaveCount(0)
 })
 
+test('starts training after choosing a deck', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('sanna.mock.v2.library', JSON.stringify({ decks: [
+    { id: 'food', emoji: '🥑', title: 'Еда и продукты', wordIds: ['e56d27ff-9b5a-5a52-b90f-02e5233e711b'] },
+  ] })))
+  await page.goto('/training')
+  await page.getByRole('button', { name: /Тренировка/ }).click()
+  await page.getByRole('dialog', { name: 'Выберите колоду' }).getByRole('button', { name: /Еда и продукты/ }).click()
+  await expect(page).toHaveURL(/\/training\/session\//)
+  await expect(page.getByRole('button', { name: 'Показать ответ' })).toBeVisible()
+})
+
 test('hides the navigation island when the mobile keyboard reduces the viewport', async ({ page }) => {
   await page.goto('/')
   const input = page.getByRole('textbox', { name: 'Поиск слова или корня' })
@@ -217,21 +228,27 @@ test('uses application controls for profile settings', async ({ page }) => {
   await page.goto('/profile')
   await expect(page.locator('select')).toHaveCount(0)
   await expect(page.locator('input[type="checkbox"]')).toHaveCount(0)
+  await expect(page.getByText('Серия')).toHaveCount(0)
+  await expect(page.getByText('Повторено')).toHaveCount(0)
+  await expect(page.getByText('Изучено')).toBeVisible()
+  await expect(page.getByText('Выучено')).toBeVisible()
   const toggle = page.getByRole('switch', { name: 'Включить напоминания' })
   await expect(toggle).toHaveAttribute('aria-checked', 'true')
   await toggle.click()
   await expect(toggle).toHaveAttribute('aria-checked', 'false')
-  await page.getByRole('button', { name: /Дневная цель/ }).click()
-  await page.getByRole('dialog', { name: 'Дневная цель' }).getByRole('radio', { name: '20 слов' }).click()
-  await expect(page.getByRole('button', { name: /Дневная цель/ })).toContainText('20 слов')
+  const slider = page.getByRole('slider', { name: 'Дневная цель от 0 до 100 слов' })
+  await expect(slider).toHaveValue('30')
+  await slider.fill('50')
+  await expect(slider).toHaveValue('50')
 })
 
 test('creates a personal phrase, finds it in My and adds it to a deck', async ({ page }) => {
   await page.goto('/dictionary')
-  await page.getByRole('button', { name: 'Добавить своё слово или фразу' }).click()
-  const form = page.getByRole('dialog', { name: 'Своё слово или фраза' })
-  await form.getByRole('button', { name: 'Фраза' }).click()
-  await form.getByLabel('Арабский текст').fill('صباح الخير')
+  await page.getByRole('button', { name: 'Добавить свою фразу' }).click()
+  const form = page.getByRole('dialog', { name: 'Своя фраза' })
+  await expect(form.getByText('Тип записи')).toHaveCount(0)
+  await expect(form.getByText('Пример')).toHaveCount(0)
+  await form.getByLabel('Арабская фраза').fill('صباح الخير')
   await form.getByLabel('Перевод').fill('Доброе утро')
   await form.getByRole('button', { name: 'Создать', exact: true }).click()
   await page.getByRole('dialog', { name: 'Сохранить в колоду' }).getByRole('button', { name: /Еда и продукты/ }).click()

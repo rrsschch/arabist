@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { buildTrainingQueue, calculateRubberBandOffset, hasDetails, lexemeSchema, LocalUserLexemeRepository, migrateLibraryState, posLabels, repositories, resetDemoData, userLexemeSchema, type Lexeme } from './core'
+import { buildDeckTrainingQueue, buildProfileLearningStats, buildTrainingQueue, calculateRubberBandOffset, hasDetails, lexemeSchema, LocalUserLexemeRepository, migrateLibraryState, posLabels, repositories, resetDemoData, userLexemeSchema, type Lexeme, type TrainingSession } from './core'
 
 const particle: Lexeme = {
   id: 'e56d27ff-9b5a-5a52-b90f-02e5233e711b',
@@ -49,7 +49,8 @@ describe('flat deck library', () => {
     }))
     expect((await repositories.library.get()).decks[0]).toEqual({ id: 'old-deck', title: 'Старая колода', emoji: '📖', wordIds: ['one'] })
     const created = await repositories.library.createDeck('Новая')
-    await repositories.library.toggleLexeme(created.id, 'two')
+    await repositories.library.addLexeme(created.id, 'two')
+    await repositories.library.addLexeme(created.id, 'two')
     expect((await repositories.library.get()).decks.find((deck) => deck.id === created.id)?.wordIds).toEqual(['two'])
     await repositories.library.remove(created.id)
     expect((await repositories.library.get()).decks.some((deck) => deck.id === created.id)).toBe(false)
@@ -59,6 +60,7 @@ describe('flat deck library', () => {
     const words = ['one', 'two', 'three'].map((id) => ({ ...particle, id }))
     expect(buildTrainingQueue({ decks: [{ id: 'deck', title: 'A', emoji: '✨', wordIds: ['three', 'three', 'missing'] }] }, words)).toEqual(['three'])
     expect(buildTrainingQueue({ decks: [] }, words, 2)).toEqual(['one', 'two'])
+    expect(buildDeckTrainingQueue({ wordIds: ['three', 'missing', 'three'] }, words)).toEqual(['three'])
   })
 
   it('updates decks and atomically removes or moves selected words without duplicates', async () => {
@@ -88,16 +90,17 @@ describe('flat deck library', () => {
 describe('personal lexemes', () => {
   beforeEach(() => resetDemoData())
 
-  it('stores validated words and phrases separately for each user', async () => {
+  it('stores only phrases and shows legacy words as phrases for each user', async () => {
     const repository = new LocalUserLexemeRepository()
     repository.setUserKey('telegram-101')
     const word = await repository.create({ kind: 'word', word_ar: ' كِتَاب ', translation: ' книга ', pos: 'noun', example: 'هذا كتاب', note: 'Повторить' })
-    expect(userLexemeSchema.parse(word)).toMatchObject({ word_ar: 'كِتَاب', translations: ['книга'], pos: 'noun', kind: 'word' })
+    expect(userLexemeSchema.parse(word)).toMatchObject({ word_ar: 'كِتَاب', translations: ['книга'], pos: null, kind: 'phrase', examples: [] })
     repository.setUserKey('telegram-202')
     expect(await repository.list()).toEqual([])
     await repository.create({ kind: 'phrase', word_ar: 'كيف حالك؟', translation: 'Как дела?' })
     repository.setUserKey('telegram-101')
     expect((await repository.list()).map((entry) => entry.id)).toEqual([word.id])
+    expect((await repository.list())[0]).toMatchObject({ kind: 'phrase', pos: null, examples: [] })
   })
 
   it('updates and removes personal entries without touching the public dictionary storage', async () => {
@@ -117,6 +120,19 @@ describe('personal lexemes', () => {
     await repositories.library.toggleLexeme(second.id, 'personal-id')
     await repositories.library.removeLexemeEverywhere('personal-id')
     expect((await repositories.library.get()).decks.filter((deck) => [first.id, second.id].includes(deck.id)).every((deck) => deck.wordIds.length === 0)).toBe(true)
+  })
+
+  it('builds learning stats from saved words and easy answers', () => {
+    const sessions: Record<string, TrainingSession> = {
+      a: { id: 'a', mode: 'flip', lexemeIds: ['one'], cursor: 1, completed: true, answers: [
+        { lexemeId: 'one', grade: 'easy', reviewedAt: 'now' },
+        { lexemeId: 'two', grade: 'hard', reviewedAt: 'now' },
+      ] },
+      b: { id: 'b', mode: 'review', lexemeIds: ['one'], cursor: 1, completed: true, answers: [
+        { lexemeId: 'one', grade: 'easy', reviewedAt: 'now' },
+      ] },
+    }
+    expect(buildProfileLearningStats({ decks: [{ id: 'deck', title: 'A', emoji: '✨', wordIds: ['one', 'two', 'one'] }] }, sessions)).toEqual({ studied: 2, learned: 1, deckCount: 1 })
   })
 })
 
