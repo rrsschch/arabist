@@ -297,13 +297,25 @@ function Library() {
       <div className="mb-5 flex items-center gap-3"><button className="button button-ghost icon-button" onClick={closeDeck} aria-label={managing ? 'Завершить управление' : 'Назад'}><ArrowLeft /></button><div className="min-w-0 flex-1"><h1 className="truncate text-xl font-extrabold">{deck.emoji} {deck.title}{managing ? ` ${selected.length}` : ''}</h1><p className="muted text-xs">{deck.wordIds.length} слов</p></div>{deck.wordIds.length > 0 && <button className="button button-secondary" onClick={() => { setManaging((value) => !value); setSelected([]) }}><ListChecks size={18} /> {managing ? 'Готово' : 'Управление'}</button>}</div>
       <button className="button button-secondary mb-4 w-full" onClick={() => setPersonalOpen(true)}><Plus size={18} /> Добавить свою фразу</button>
       {deck.wordIds.length && words.data ? <div className="word-list">{deckWords.map((word) => <WordRow key={word.id} word={word} selected={selected.includes(word.id)} onSelect={managing ? () => toggleSelected(word.id) : undefined} />)}</div> : <><EmptyState title="Колода пустая" text="Добавьте слова из словаря или создайте личную фразу." /><Link className="button button-primary mt-4 w-full no-underline" to="/dictionary"><Search size={18} /> Открыть словарь</Link></>}
-      {managing && <><div className="h-28" /><div className="selection-bar" role="toolbar" aria-label="Действия с выбранными словами"><button className="selection-action" disabled={selected.length === 0} onClick={() => setMoveOpen(true)}><MoveRight size={24} /><span>Переместить</span></button><button className="selection-action" disabled={selected.length === 0} onClick={() => setConfirmRemove(true)}><Trash2 size={24} /><span>Удалить</span></button></div></>}
+      {managing && <><div className="selection-spacer" /><DeckSelectionBar selectedCount={selected.length} onMove={() => setMoveOpen(true)} onRemove={() => setConfirmRemove(true)} /></>}
       {moveOpen && <MoveWordsDialog decks={otherDecks} count={selected.length} onClose={() => setMoveOpen(false)} onCreate={() => { setMoveOpen(false); setManaging(false); setSelected([]); navigate('/library') }} onMove={async (targetId) => { await repositories.library.moveLexemes(deck.id, targetId, selected); await finishAction() }} />}
       {personalOpen && <PersonalLexemeDialog deckId={deck.id} onClose={() => setPersonalOpen(false)} onSaved={() => { setPersonalOpen(false); queryClient.invalidateQueries({ queryKey: queryKeys.lexemes }); refresh() }} />}
       {confirmRemove && <ConfirmDialog title="Убрать слова из колоды?" text={`Выбранные записи (${selected.length}) останутся в словаре и других колодах.`} confirmLabel="Убрать" destructive onClose={() => setConfirmRemove(false)} onConfirm={async () => { await repositories.library.removeLexemes(deck.id, selected); setConfirmRemove(false); await finishAction() }} />}
     </>
   }
   return <><button className="button button-primary mb-4 w-full" onClick={() => setCreate(true)}><Plus /> Новая колода</button>{library.data.decks.length ? <div className="grid gap-3">{library.data.decks.map((item) => <LibraryTile key={item.id} deck={item} onActions={() => setActionsDeck(item)} />)}</div> : <EmptyState title="Колод пока нет" text="Создайте первую колоду и сохраняйте в неё слова из словаря." />}{create && <DeckDialog onClose={() => setCreate(false)} />}{editingDeck && <DeckDialog deck={editingDeck} onClose={() => setEditingDeck(null)} />}{actionsDeck && <DeckActionsDialog deck={actionsDeck} onClose={() => setActionsDeck(null)} onEdit={() => { setActionsDeck(null); setEditingDeck(actionsDeck) }} onDelete={() => { setConfirmDeck(actionsDeck); setActionsDeck(null) }} />}{confirmDeck && <ConfirmDialog title="Удалить колоду?" text={`«${confirmDeck.title}»: ${confirmDeck.wordIds.length} слов. Сами слова останутся в словаре.`} confirmLabel="Удалить" destructive onClose={() => setConfirmDeck(null)} onConfirm={async () => { await repositories.library.remove(confirmDeck.id); await refresh(); setConfirmDeck(null) }} />}</>
+}
+
+function DeckSelectionBar({ selectedCount, onMove, onRemove }: { selectedCount: number; onMove(): void; onRemove(): void }) {
+  if (typeof document === 'undefined') return null
+  const target = document.querySelector('.app-viewport') ?? document.body
+  return createPortal(
+    <div className="selection-bar" role="toolbar" aria-label="Действия с выбранными словами">
+      <button className="selection-action" disabled={selectedCount === 0} onClick={onMove}><MoveRight size={22} /><span>Переместить</span></button>
+      <button className="selection-action" disabled={selectedCount === 0} onClick={onRemove}><Trash2 size={22} /><span>Удалить</span></button>
+    </div>,
+    target,
+  )
 }
 
 function PersonalLexemeDialog({ entry, deckId, onClose, onSaved }: { entry?: UserLexeme; deckId?: string; onClose(): void; onSaved?(entry: UserLexeme): void }) {
