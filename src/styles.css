@@ -198,6 +198,31 @@ button, a { touch-action: manipulation; }
 .bookmark-button.saved, .lexeme-save-button.saved { color: var(--accent); }
 .bookmark-button.saved svg, .lexeme-save-button.saved svg { fill: currentColor; }
 .bookmark-button:active svg, .lexeme-save-button:active svg { transform: scale(.86); }
+.personal-phrase-card { padding-block: 1.35rem 1.55rem; }
+.personal-phrase-text {
+  margin: 3.1rem auto 2.6rem; width: 100%; max-width: 100%; color: var(--text);
+  font-size: clamp(2rem, 9.5vw, 3.15rem); font-weight: 850; line-height: 1.18;
+  letter-spacing: -.035em; text-wrap: balance; overflow-wrap: anywhere;
+}
+.personal-phrase-text.font-arabic {
+  font-size: clamp(2.35rem, 11vw, 3.75rem); font-weight: 700; line-height: 1.45;
+  letter-spacing: 0;
+}
+.personal-phrase-text.lexeme-word-medium { font-size: clamp(1.75rem, 7.5vw, 2.55rem); line-height: 1.24; }
+.personal-phrase-text.lexeme-word-long { font-size: clamp(1.45rem, 6.2vw, 2.1rem); line-height: 1.32; }
+.personal-phrase-text.font-arabic.lexeme-word-medium { font-size: clamp(2rem, 8.6vw, 3rem); line-height: 1.48; }
+.personal-phrase-text.font-arabic.lexeme-word-long { font-size: clamp(1.65rem, 7vw, 2.45rem); line-height: 1.55; }
+.bookmark-divider {
+  position: relative; display: grid; place-items: center end; margin: 0 0 1rem;
+}
+.bookmark-divider > span {
+  position: absolute; left: 0; right: 0; top: 50%; height: 1px;
+  background: var(--border); transform: translateY(-50%);
+}
+.bookmark-divider .icon-button {
+  position: relative; z-index: 1; background: var(--surface); color: var(--muted);
+}
+.personal-translation { font-size: .94rem; line-height: 1.55; }
 .example-card { overflow-wrap: anywhere; }
 .example-arabic { font-size: clamp(1.35rem, 6vw, 1.55rem); line-height: 1.9; }
 .example-translation { font-size: .96rem; line-height: 1.65; }
