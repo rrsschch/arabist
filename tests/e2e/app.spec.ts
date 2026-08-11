@@ -117,6 +117,36 @@ test('shows Training without flip-card and quiz blocks', async ({ page }) => {
   await expect(page.getByText('Тест на знание')).toHaveCount(0)
 })
 
+test('adds rubber-band feedback on short library and training pages', async ({ page }) => {
+  await page.goto('/training')
+  const result = await page.locator('.app-scroll').evaluate((scroller) => {
+    const target = scroller.querySelector<HTMLElement>('.rubber-content')
+    if (!target) return { supported: false }
+    const send = (type: 'touchstart' | 'touchmove' | 'touchend', y: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true })
+      const touches = type === 'touchend' ? [] : [{ clientY: y }]
+      Object.defineProperty(event, 'touches', { value: touches })
+      Object.defineProperty(event, 'changedTouches', { value: [{ clientY: y }] })
+      scroller.dispatchEvent(event)
+    }
+    send('touchstart', 300)
+    send('touchmove', 360)
+    const top = target.style.getPropertyValue('--rubber-y')
+    send('touchend', 360)
+    send('touchstart', 300)
+    send('touchmove', 240)
+    const bottom = target.style.getPropertyValue('--rubber-y')
+    send('touchend', 240)
+    return { supported: true, top, bottom }
+  })
+  expect(result.supported).toBe(true)
+  expect(Number.parseFloat(result.top ?? '0')).toBeGreaterThan(0)
+  expect(Number.parseFloat(result.bottom ?? '0')).toBeLessThan(0)
+
+  await page.goto('/library')
+  await expect(page.locator('.app-scroll')).toBeVisible()
+})
+
 test('starts training after choosing a deck', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('sanna.mock.v2.library', JSON.stringify({ decks: [
     { id: 'food', emoji: '🥑', title: 'Еда и продукты', wordIds: ['e56d27ff-9b5a-5a52-b90f-02e5233e711b'] },

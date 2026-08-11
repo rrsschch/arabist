@@ -52,7 +52,8 @@ export function App() {
 
 function AppShell() {
   const location = useLocation()
-  const scrollRef = useRubberBand<HTMLDivElement>()
+  const needsShortPageRubber = location.pathname.startsWith('/library') || location.pathname === '/training'
+  const scrollRef = useRubberBand<HTMLDivElement>({ forceShortPageRubber: needsShortPageRubber })
   const { selectionHaptic } = useTelegram()
   const sections = ['/', '/dictionary', '/training', '/library', '/profile']
   const activeIndex = Math.max(0, sections.findIndex((path) => path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)))
@@ -75,12 +76,13 @@ function NavItem({ to, label, icon, onNavigate, end }: { to: string; label: stri
   return <NavLink to={to} end={end} onClick={onNavigate} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>{icon}<span>{label}</span></NavLink>
 }
 
-function useRubberBand<T extends HTMLElement>() {
+function useRubberBand<T extends HTMLElement>({ forceShortPageRubber = false }: { forceShortPageRubber?: boolean } = {}) {
   const ref = useRef<T>(null)
   const { isTelegram } = useTelegram()
   useEffect(() => {
     const scroller = ref.current
-    if (!scroller || /iPhone|iPad|iPod/i.test(navigator.userAgent)) return
+    const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+    if (!scroller || (isIos && !forceShortPageRubber)) return
     let startY = 0
     const content = () => scroller.querySelector<HTMLElement>('.rubber-content')
     const reset = () => {
@@ -92,13 +94,13 @@ function useRubberBand<T extends HTMLElement>() {
     const onMove = (event: TouchEvent) => {
       const current = event.touches[0]?.clientY ?? startY; const delta = current - startY
       const atTop = scroller.scrollTop <= 0; const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1
-      const offset = calculateRubberBandOffset(delta, atTop, atBottom, isTelegram)
+      const offset = calculateRubberBandOffset(delta, atTop, atBottom, isTelegram && !forceShortPageRubber)
       if (!offset) return
       content()?.style.setProperty('--rubber-y', `${offset}px`)
     }
     scroller.addEventListener('touchstart', onStart, { passive: true }); scroller.addEventListener('touchmove', onMove, { passive: true }); scroller.addEventListener('touchend', reset, { passive: true }); scroller.addEventListener('touchcancel', reset, { passive: true })
     return () => { scroller.removeEventListener('touchstart', onStart); scroller.removeEventListener('touchmove', onMove); scroller.removeEventListener('touchend', reset); scroller.removeEventListener('touchcancel', reset) }
-  }, [isTelegram])
+  }, [forceShortPageRubber, isTelegram])
   return ref
 }
 
