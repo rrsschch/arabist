@@ -29,6 +29,7 @@
   --app-safe-left: max(env(safe-area-inset-left, 0px), var(--tg-safe-left), var(--tg-content-safe-left));
   --app-top-padding: calc(16px + var(--app-safe-top));
   --app-sticky-top: 0px;
+  --app-frame-width: 520px;
 }
 
 :root[data-telegram="true"] {
@@ -119,7 +120,7 @@ button, a { touch-action: manipulation; }
 }
 .bottom-nav {
   position: absolute; z-index: 40; left: 50%; transform: translateX(-50%);
-  bottom: calc(14px + var(--app-safe-bottom)); width: min(calc(100% - 24px), 520px);
+  bottom: calc(14px + var(--app-safe-bottom)); width: min(calc(100% - 24px), var(--app-frame-width));
   display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; padding: 7px;
   border-radius: 1.7rem; background: color-mix(in srgb, var(--surface), transparent 8%);
   border: 1px solid color-mix(in srgb, var(--border), white 20%);
@@ -184,7 +185,7 @@ button, a { touch-action: manipulation; }
 .selection-spacer { height: calc(104px + var(--app-safe-bottom)); }
 .selection-bar {
   position: absolute; z-index: 45; left: 50%; transform: translateX(-50%);
-  bottom: calc(118px + var(--app-safe-bottom)); width: min(calc(100% - 32px), 488px);
+  bottom: calc(118px + var(--app-safe-bottom)); width: min(calc(100% - 32px), calc(var(--app-frame-width) - 32px));
   display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 6px;
   padding: 6px; border: 1px solid color-mix(in srgb, var(--border), white 22%); border-radius: 1.15rem;
   background: color-mix(in srgb, var(--surface), transparent 7%); box-shadow: 0 16px 40px rgba(15, 23, 42, .16); backdrop-filter: blur(18px);
@@ -302,8 +303,9 @@ button, a { touch-action: manipulation; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
 @media (min-width: 700px) { .app-shell { padding-top: max(38px, var(--app-top-padding)); } }
-@media (min-width: 800px) {
+@media (min-width: 560px) and (hover: hover) and (pointer: fine) {
+  :root { --app-frame-width: 620px; }
   body { display: grid; place-items: center; padding: 20px; }
-  .app-viewport { width: min(520px, calc(100vw - 40px)); height: min(900px, calc(100dvh - 40px)); border: 1px solid rgba(148, 163, 184, .28); border-radius: 2rem; box-shadow: 0 28px 90px rgba(30, 41, 59, .2); }
+  .app-viewport { width: min(var(--app-frame-width), calc(100vw - 40px)); height: min(980px, calc(100dvh - 40px)); border: 1px solid rgba(148, 163, 184, .28); border-radius: 1.35rem; box-shadow: 0 28px 90px rgba(30, 41, 59, .2); }
   .training-stage { min-height: 620px; }
 }
