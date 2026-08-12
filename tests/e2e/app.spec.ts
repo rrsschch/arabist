@@ -323,11 +323,12 @@ test('creates a personal phrase, finds it in My and adds it to a deck', async ({
   await expect(page.getByText('صباح الخير')).toBeVisible()
 })
 
-test('contains the app in a 520px desktop frame', async ({ page }, testInfo) => {
+test('contains the app in a wider BotFather-like desktop frame', async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.includes('desktop'), 'desktop-only layout')
   await page.goto('/')
   const box = await page.locator('.app-viewport').boundingBox()
-  expect(box!.width).toBeLessThanOrEqual(520)
+  expect(box!.width).toBeGreaterThanOrEqual(600)
+  expect(box!.width).toBeLessThanOrEqual(620)
   expect(box!.width).toBeLessThan(page.viewportSize()!.width)
   expect(await page.locator('.app-viewport').evaluate((element) => getComputedStyle(element).borderRadius)).not.toBe('0px')
 })
