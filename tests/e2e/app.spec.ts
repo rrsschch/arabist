@@ -117,6 +117,22 @@ test('shows Training without flip-card and quiz blocks', async ({ page }) => {
   await expect(page.getByText('Тест на знание')).toHaveCount(0)
 })
 
+test('opens study mode as browsable full cards', async ({ page }) => {
+  await page.goto('/training')
+  await page.getByRole('button', { name: /Изучение/ }).click()
+  await expect(page).toHaveURL(/\/training\/session\//)
+  await expect(page.locator('.study-card')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Показать ответ' })).toHaveCount(0)
+  await expect(page.getByText('Перевод')).toBeVisible()
+  await expect(page.locator('.study-translations li').first()).toBeVisible()
+
+  const firstWord = await page.locator('.study-word').textContent()
+  await page.getByRole('button', { name: /Далее/ }).click()
+  await expect(page.locator('.study-word')).not.toHaveText(firstWord ?? '')
+  await page.getByRole('button', { name: /Назад/ }).click()
+  await expect(page.locator('.study-word')).toHaveText(firstWord ?? '')
+})
+
 test('adds rubber-band feedback on short library and training pages', async ({ page }) => {
   await page.goto('/training')
   const result = await page.locator('.app-scroll').evaluate((scroller) => {

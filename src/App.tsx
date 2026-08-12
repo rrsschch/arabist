@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode, type TouchEvent as ReactTouchEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -413,10 +413,75 @@ function TrainingSessionPage() {
   if (session.isError || words.isError) return <Standalone><ErrorState error={session.error ?? words.error} /></Standalone>
   if (!session.data) return <Navigate to="/training" replace />
   if (session.data.completed) return <Standalone><div className="grid min-h-[80dvh] place-items-center"><div className="card w-full p-8 text-center"><span className="text-6xl">🎉</span><h1 className="page-title mt-4">Сессия завершена</h1><p className="muted mt-2">Повторено слов: {session.data.answers.length}</p><button className="button button-primary mt-6 w-full" onClick={close}>Вернуться в тренажёр</button></div></div></Standalone>
+  if (session.data.mode === 'study') {
+    const studyWords = session.data.lexemeIds.map((id) => words.data?.find((item) => item.id === id)).filter((item): item is CatalogLexeme => Boolean(item))
+    return <Standalone><StudySessionView words={studyWords} onClose={close} /></Standalone>
+  }
   const wordId = session.data.lexemeIds[session.data.cursor]; const word = words.data?.find((item) => item.id === wordId)
   if (!word) return <Standalone><LoadingState label="Пропускаем удалённую запись…" /></Standalone>
   const progress = Math.round((session.data.cursor / session.data.lexemeIds.length) * 100)
   return <Standalone><header className="flex items-center gap-3"><button className="button button-ghost icon-button" onClick={close} aria-label="Закрыть тренировку"><X /></button><div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--border)]"><div className="training-progress h-full rounded-full bg-[var(--accent)]" style={{ width: `${progress}%` }} /></div><span className="muted text-xs font-bold">{session.data.cursor + 1}/{session.data.lexemeIds.length}</span></header><div className="training-stage grid content-center"><article className="card p-7 text-center">{word.pos ? <span className={`pos-badge pos-${word.pos}`}>{posLabels[word.pos]}</span> : <span className="personal-badge">{word.kind === 'phrase' ? 'Фраза' : 'Моё слово'}</span>}<p className="font-arabic mt-10 text-7xl" dir="rtl">{word.word_ar}</p>{revealed && <div className="training-answer mt-8 border-t border-[var(--border)] pt-6"><p className="text-lg font-extrabold">{word.translations.join('; ')}</p>{word.details.root && <p className="muted font-arabic mt-3" dir="rtl">Корень: {word.details.root}</p>}{word.note && <p className="muted mt-3 text-sm">{word.note}</p>}</div>}</article>{!revealed ? <button className="button button-primary mt-4 w-full" onClick={() => setRevealed(true)}>Показать ответ</button> : <div className="training-grades mt-4 grid grid-cols-3 gap-2"><GradeButton label="Снова" grade="again" className="bg-rose-50 text-rose-700" onClick={(grade) => answer.mutate({ wordId, grade })} /><GradeButton label="Трудно" grade="hard" className="bg-amber-50 text-amber-700" onClick={(grade) => answer.mutate({ wordId, grade })} /><GradeButton label="Легко" grade="easy" className="bg-emerald-50 text-emerald-700" onClick={(grade) => answer.mutate({ wordId, grade })} /></div>}</div></Standalone>
+}
+
+function StudySessionView({ words, onClose }: { words: CatalogLexeme[]; onClose(): void }) {
+  const [index, setIndex] = useState(0)
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
+  const word = words[index]
+  const total = words.length
+  const canPrev = index > 0
+  const canNext = index < total - 1
+  const progress = total ? Math.round(((index + 1) / total) * 100) : 0
+
+  useEffect(() => {
+    if (index >= total) setIndex(Math.max(0, total - 1))
+  }, [index, total])
+
+  const goPrev = useCallback(() => setIndex((current) => Math.max(0, current - 1)), [])
+  const goNext = useCallback(() => setIndex((current) => Math.min(total - 1, current + 1)), [total])
+  const onTouchEnd = useCallback((event: ReactTouchEvent<HTMLElement>) => {
+    const start = touchStart.current
+    touchStart.current = null
+    if (!start) return
+    const changed = event.changedTouches[0]
+    const dx = changed.clientX - start.x
+    const dy = changed.clientY - start.y
+    if (Math.abs(dx) < 52 || Math.abs(dx) < Math.abs(dy) * 1.25) return
+    if (dx < 0) goNext()
+    else goPrev()
+  }, [goNext, goPrev])
+
+  if (!word) return <div className="grid min-h-[70dvh] place-items-center"><EmptyState title="Карточек пока нет" text="Добавьте слова в колоду или откройте общий словарь." /></div>
+
+  return <div className="study-session">
+    <header className="study-header">
+      <button className="button button-ghost icon-button" onClick={onClose} aria-label="Закрыть изучение"><X /></button>
+      <div className="min-w-0 flex-1">
+        <p className="eyebrow">Изучение</p>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--border)]"><div className="training-progress h-full rounded-full bg-[var(--accent)]" style={{ width: `${progress}%` }} /></div>
+      </div>
+      <span className="muted shrink-0 text-xs font-bold">{index + 1}/{total}</span>
+    </header>
+
+    <article className="card study-card" onTouchStart={(event) => { const touch = event.touches[0]; touchStart.current = { x: touch.clientX, y: touch.clientY } }} onTouchEnd={onTouchEnd}>
+      <div className="study-card-top">
+        {word.pos ? <span className={`pos-badge pos-${word.pos}`}>{posLabels[word.pos]}</span> : <span className="personal-badge">Фраза</span>}
+        {word.details.root && <span className="study-root font-arabic" dir="rtl">{word.details.root}</span>}
+      </div>
+      <p className={`font-arabic study-word ${getLexemeWordSizeClass(word.word_ar)}`} dir={hasArabic(word.word_ar) ? 'rtl' : undefined}>{word.word_ar}</p>
+      <div className="study-section study-translations">
+        <h2>Перевод</h2>
+        <ul>{word.translations.map((translation, translationIndex) => <li key={translationIndex}>{translation}</li>)}</ul>
+      </div>
+      {word.source === 'user' && word.note && <div className="study-section"><h2>Заметка</h2><p className="muted whitespace-pre-line">{word.note}</p></div>}
+      {hasDetails(word) && <div className="study-section"><h2>Детали</h2><div className="study-detail-grid">{detailRows(word).map(([label, value]) => <div className="study-detail" key={label}><span className="eyebrow">{label}</span><p dir={hasArabic(value) ? 'rtl' : undefined} className={hasArabic(value) ? 'font-arabic' : ''}>{value}</p></div>)}</div></div>}
+      {word.examples.length > 0 && <div className="study-section"><h2>Примеры</h2><div className="grid gap-3">{word.examples.map((example, exampleIndex) => <ExampleCard example={example} key={exampleIndex} />)}</div></div>}
+    </article>
+
+    <nav className="study-nav" aria-label="Листание карточек">
+      <button className="button button-secondary" onClick={goPrev} disabled={!canPrev}><ArrowLeft size={18} /> Назад</button>
+      {canNext ? <button className="button button-primary" onClick={goNext}>Далее <ChevronRight size={18} /></button> : <button className="button button-primary" onClick={onClose}>Завершить</button>}
+    </nav>
+  </div>
 }
 
 function GradeButton({ label, grade, className, onClick }: { label: string; grade: ReviewGrade; className: string; onClick(grade: ReviewGrade): void }) { return <button className={`button ${className}`} onClick={() => onClick(grade)}>{label}</button> }
