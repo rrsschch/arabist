@@ -61,6 +61,11 @@ export function isTelegramEnvironment(app: { initData?: string; platform?: strin
   return Boolean(app && (app.initData || app.platform && app.platform !== 'unknown'))
 }
 
+export function shouldExpandTelegramMiniApp(platform?: string) {
+  const value = platform?.toLowerCase()
+  return value === 'ios' || value === 'android' || value === 'android_x'
+}
+
 function useKeyboardVisibility() {
   useEffect(() => {
     const viewport = window.visualViewport
@@ -97,7 +102,7 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
     root.dataset.telegram = String(isTelegram)
     if (!app) return () => { delete root.dataset.telegram }
     const sync = () => { setColorScheme(app.colorScheme); applyInsets(app) }
-    app.ready(); app.expand(); sync()
+    app.ready(); if (shouldExpandTelegramMiniApp(app.platform)) app.expand(); sync()
     app.setHeaderColor(app.themeParams.bg_color ?? '#f6f8fc')
     app.setBackgroundColor(app.themeParams.bg_color ?? '#f6f8fc')
     app.onEvent('themeChanged', sync); app.onEvent('safeAreaChanged', sync); app.onEvent('contentSafeAreaChanged', sync)

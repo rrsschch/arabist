@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isKeyboardLikelyOpen, isTelegramEnvironment, isTextEntryElement } from './telegram'
+import { isKeyboardLikelyOpen, isTelegramEnvironment, isTextEntryElement, shouldExpandTelegramMiniApp } from './telegram'
 
 describe('mobile keyboard detection', () => {
   it('only treats a substantial viewport reduction while editing as an open keyboard', () => {
@@ -18,5 +18,14 @@ describe('Telegram environment detection', () => {
     expect(isTelegramEnvironment({ initData: '', platform: 'unknown' })).toBe(false)
     expect(isTelegramEnvironment({ initData: 'signed-data', platform: 'unknown' })).toBe(true)
     expect(isTelegramEnvironment({ initData: '', platform: 'ios' })).toBe(true)
+  })
+
+  it('keeps desktop Mini Apps compact by not requesting expand', () => {
+    expect(shouldExpandTelegramMiniApp('ios')).toBe(true)
+    expect(shouldExpandTelegramMiniApp('android')).toBe(true)
+    expect(shouldExpandTelegramMiniApp('tdesktop')).toBe(false)
+    expect(shouldExpandTelegramMiniApp('macos')).toBe(false)
+    expect(shouldExpandTelegramMiniApp('web')).toBe(false)
+    expect(shouldExpandTelegramMiniApp(undefined)).toBe(false)
   })
 })
