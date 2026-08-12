@@ -12,6 +12,7 @@ type TelegramWebApp = {
   initDataUnsafe?: { user?: { id: number; first_name: string; username?: string; photo_url?: string } }
   ready(): void
   expand(): void
+  requestFullscreen?(): void
   setHeaderColor(color: string): void
   setBackgroundColor(color: string): void
   onEvent(event: string, callback: () => void): void
@@ -66,6 +67,16 @@ export function shouldExpandTelegramMiniApp(platform?: string) {
   return value === 'ios' || value === 'android' || value === 'android_x'
 }
 
+export function requestMobileTelegramFullscreen(app: Pick<TelegramWebApp, 'expand' | 'platform' | 'requestFullscreen'>) {
+  if (!shouldExpandTelegramMiniApp(app.platform)) return
+  try {
+    if (app.requestFullscreen) app.requestFullscreen()
+    else app.expand()
+  } catch {
+    app.expand()
+  }
+}
+
 function useKeyboardVisibility() {
   useEffect(() => {
     const viewport = window.visualViewport
@@ -102,7 +113,7 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
     root.dataset.telegram = String(isTelegram)
     if (!app) return () => { delete root.dataset.telegram }
     const sync = () => { setColorScheme(app.colorScheme); applyInsets(app) }
-    app.ready(); if (shouldExpandTelegramMiniApp(app.platform)) app.expand(); sync()
+    app.ready(); requestMobileTelegramFullscreen(app); sync()
     app.setHeaderColor(app.themeParams.bg_color ?? '#f6f8fc')
     app.setBackgroundColor(app.themeParams.bg_color ?? '#f6f8fc')
     app.onEvent('themeChanged', sync); app.onEvent('safeAreaChanged', sync); app.onEvent('contentSafeAreaChanged', sync)
