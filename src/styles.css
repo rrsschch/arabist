@@ -148,6 +148,26 @@ button, a { touch-action: manipulation; }
 .word-card { color: inherit; text-decoration: none; padding: 1rem; display: grid; grid-template-columns: 1fr auto; gap: .8rem; }
 .word-row-arabic { font-size: clamp(2rem, 9vw, 2.5rem); line-height: 1.25; overflow-wrap: anywhere; }
 .word-row-translations { display: grid; gap: .18rem; color: var(--text); }
+.personal-word-card {
+  min-height: 0; height: 190px; overflow: hidden; align-items: stretch;
+}
+.personal-word-card > a,
+.personal-word-card.manage-word-card > span {
+  display: flex; min-height: 0; flex-direction: column;
+}
+.personal-word-card .word-row-badges { flex: none; }
+.personal-word-card .word-row-arabic {
+  display: -webkit-box; flex: 1; min-height: 0; overflow: hidden;
+  -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+  font-size: clamp(1.7rem, 7.2vw, 2.35rem); line-height: 1.16;
+  text-overflow: ellipsis;
+}
+.personal-word-card .word-row-arabic.font-arabic {
+  font-size: clamp(1.9rem, 8vw, 2.55rem); line-height: 1.35;
+}
+.personal-word-card .word-row-translations {
+  flex: none; margin-top: .55rem;
+}
 .selection-check {
   width: 28px; height: 28px; align-self: center; display: grid; place-items: center;
   border: 2px solid var(--border); border-radius: .65rem; color: white; background: var(--surface);
