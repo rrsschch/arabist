@@ -245,8 +245,15 @@ button, a { touch-action: manipulation; }
 }
 .personal-translation { font-size: .94rem; line-height: 1.55; }
 .example-card { overflow-wrap: anywhere; }
-.example-arabic { font-size: clamp(1.35rem, 6vw, 1.55rem); line-height: 1.9; }
-.example-translation { font-size: .96rem; line-height: 1.65; }
+.example-arabic {
+  direction: rtl; unicode-bidi: isolate; text-align: right;
+  font-size: clamp(1.28rem, 5.2vw, 1.48rem); line-height: 1.85;
+  letter-spacing: 0; word-spacing: .08em; overflow-wrap: anywhere;
+}
+.example-translation {
+  direction: ltr; unicode-bidi: plaintext; text-align: left;
+  font-size: .94rem; line-height: 1.6;
+}
 .phrase-input { min-height: 112px; line-height: 1.8; }
 .training-progress { transition: width var(--motion-base) var(--motion-ease); }
 .training-answer, .training-grades { animation: answer-enter var(--motion-base) var(--motion-ease) both; }

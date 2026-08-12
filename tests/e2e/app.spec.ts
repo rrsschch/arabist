@@ -237,6 +237,14 @@ test('places audio and bookmark controls on either side of the lexeme', async ({
   expect(bookmarkBox!.width).toBeGreaterThanOrEqual(44)
 })
 
+test('renders Arabic and Russian example parts separately', async ({ page }) => {
+  await page.goto('/lexemes/3cd23a89-b6b3-55c7-a807-d5b96feba2c2')
+  const firstExample = page.locator('.example-card').first()
+  await expect(firstExample.locator('.example-arabic')).toHaveText('أَفَهِمْتَ هَذَا؟')
+  await expect(firstExample.locator('.example-translation')).toHaveText('понял ли ты это?')
+  await expect(firstExample.locator('.example-arabic')).not.toHaveText(/أ\s+ف\s+ه/)
+})
+
 test('opens dialogs in the center and restores page scrolling after close', async ({ page }) => {
   await page.goto('/library')
   await page.getByRole('button', { name: /Новая колода/ }).click()
