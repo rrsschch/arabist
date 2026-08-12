@@ -255,16 +255,23 @@ function ExampleCard({ example }: { example: string }) {
   return <article className="card example-card p-4"><p className="font-arabic example-arabic text-right" dir="rtl">{arabic}</p>{rest.length > 0 && <p className="muted example-translation mt-3 whitespace-pre-line">{rest.join('\n')}</p>}</article>
 }
 
-function splitExample(example: string) {
+function splitExample(example: string): { arabic?: string; rest: string[] } {
   const cleaned = example.replace(/\s+/g, ' ').trim()
   const parts = cleaned.split(/\s*[—–-]\s*|\n+/).map((line) => line.trim()).filter(Boolean)
   if (parts.length > 1) {
-    const arabic = parts.find(hasArabic)
-    return { arabic, rest: parts.filter((line) => line !== arabic) }
+    const parsed = parts.map(splitExample).find((part) => part.arabic)
+    const arabic = parsed?.arabic
+    const rest = parts.flatMap((line) => {
+      if (line === arabic) return []
+      const parsedLine = splitExample(line)
+      if (parsedLine.arabic === arabic) return parsedLine.rest
+      return line === parsedLine.arabic ? [] : [line]
+    })
+    return { arabic, rest }
   }
-  const arabicMatches = cleaned.match(/(?:\p{Script=Arabic}|[؟،؛]|\s)+/gu) ?? []
-  const arabic = arabicMatches.map((part) => part.trim()).filter(Boolean).join(' ').trim()
-  const rest = arabic ? cleaned.replace(arabic, '').trim().replace(/^[؟?،,.;:]+|[؟?،,.;:]+$/g, '').trim() : ''
+  const leadingArabic = cleaned.match(/^[\p{Script=Arabic}\p{Mark}\u0640\s؟،؛.!?]+/u)?.[0].trim()
+  const arabic = leadingArabic || cleaned.match(/[\p{Script=Arabic}\p{Mark}\u0640\s؟،؛.!?]+/u)?.[0]?.trim()
+  const rest = arabic ? cleaned.slice(cleaned.indexOf(arabic) + arabic.length).trim().replace(/^[؟،,.;:]+/, '').trim() : ''
   return { arabic: arabic || undefined, rest: rest ? [rest] : [] }
 }
 
