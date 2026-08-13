@@ -26,6 +26,7 @@ declare global { interface Window { Telegram?: { WebApp?: TelegramWebApp } } }
 interface TelegramContextValue {
   app: TelegramWebApp | null
   isTelegram: boolean
+  initData: string
   colorScheme: 'light' | 'dark'
   user: { id: number; firstName: string; username?: string; photoUrl?: string }
   haptic(): void
@@ -34,7 +35,7 @@ interface TelegramContextValue {
 
 const fallbackUser = { id: 0, firstName: 'Ученик' }
 const TelegramContext = createContext<TelegramContextValue>({
-  app: null, isTelegram: false, colorScheme: 'light', user: fallbackUser, haptic() {}, selectionHaptic() {},
+  app: null, isTelegram: false, initData: '', colorScheme: 'light', user: fallbackUser, haptic() {}, selectionHaptic() {},
 })
 
 function applyInsets(app: TelegramWebApp) {
@@ -128,6 +129,7 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
   const value = useMemo<TelegramContextValue>(() => ({
     app,
     isTelegram,
+    initData: app?.initData ?? '',
     colorScheme,
     user: rawUser ? { id: rawUser.id, firstName: rawUser.first_name, username: rawUser.username, photoUrl: rawUser.photo_url } : fallbackUser,
     haptic: () => app?.HapticFeedback?.impactOccurred('light'),

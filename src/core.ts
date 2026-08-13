@@ -15,11 +15,13 @@ export interface LexemeDetails {
   masdar: string | null
   plural: string | null
   gender: 'masculine' | 'feminine' | null
+  subtype?: string | null
 }
 
 export interface Lexeme {
   id: string
   word_ar: string
+  word_ar_plain?: string
   pos: PartOfSpeech
   subtype: string | null
   translations: string[]
@@ -88,6 +90,7 @@ export const lexemeSchema = z.object({
     masdar: z.string().nullable(),
     plural: z.string().nullable(),
     gender: z.enum(['masculine', 'feminine']).nullable(),
+    subtype: z.string().nullable().optional(),
   }),
 })
 export const lexemeListSchema = z.array(lexemeSchema)
@@ -172,6 +175,17 @@ export interface ProfileRepository { get(): Promise<Profile>; update(patch: Part
 export interface AuthGateway { exchangeTelegramInitData(initData: string): Promise<{ id: number; firstName: string }> }
 export interface AudioRepository { getUrl(lexemeId: string): Promise<string | null> }
 export interface ReviewStats { learned: number }
+export interface LocalSnapshot {
+  importKey: string
+  profile: Profile
+  library: LibraryState
+  userLexemes: UserLexeme[]
+}
+export interface BackendController {
+  isEnabled(): boolean
+  authenticate(initData: string): Promise<void>
+  importLocalSnapshot(userKey: string): Promise<void>
+}
 
 class StaticLexemeRepository {
   private cache?: Promise<Lexeme[]>
@@ -414,16 +428,155 @@ class LocalProfileRepository implements ProfileRepository {
   async update(patch: Partial<Profile>) { const next = { ...(await this.get()), ...patch }; write('profile', next); return next }
 }
 
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '')
+
+class ApiClient {
+  private active = false
+  isEnabled() { return Boolean(apiBaseUrl && this.active) }
+  async authenticate(initData: string) {
+    if (!apiBaseUrl || !initData) return
+    await this.request('/auth/telegram', { method: 'POST', body: { initData }, allowInactive: true })
+    this.active = true
+  }
+  async request<T>(path: string, init: { method?: string; body?: unknown; allowInactive?: boolean } = {}): Promise<T> {
+    if (!apiBaseUrl) throw new Error('API backend is not configured')
+    if (!this.active && !init.allowInactive) throw new Error('Backend session is not ready')
+    const response = await fetch(`${apiBaseUrl}${path}`, {
+      method: init.method ?? 'GET',
+      credentials: 'include',
+      headers: init.body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null
+      throw new Error(body?.error ?? 'Backend request failed')
+    }
+    return response.json() as Promise<T>
+  }
+}
+
+class ApiUserLexemeRepository implements UserLexemeRepository {
+  constructor(private readonly api: ApiClient) {}
+  setUserKey() {}
+  async list() { return this.api.request<UserLexeme[]>('/user-lexemes') }
+  async get(id: string) { return this.api.request<UserLexeme | null>(`/user-lexemes/${encodeURIComponent(id)}`) }
+  async create(input: UserLexemeInput) { return this.api.request<UserLexeme>('/user-lexemes', { method: 'POST', body: input }) }
+  async update(id: string, input: UserLexemeInput) { return this.api.request<UserLexeme>(`/user-lexemes/${encodeURIComponent(id)}`, { method: 'PATCH', body: input }) }
+  async remove(id: string) { await this.api.request(`/user-lexemes/${encodeURIComponent(id)}`, { method: 'DELETE' }) }
+}
+
+class ApiLibraryRepository implements LibraryRepository {
+  constructor(private readonly api: ApiClient, private readonly lexemes: LexemeRepository) {}
+  async get() { return this.api.request<LibraryState>('/decks') }
+  async createDeck(title: string, emoji = '✨') { return this.api.request<Deck>('/decks', { method: 'POST', body: { title, emoji } }) }
+  async updateDeck(id: string, patch: Pick<Deck, 'title' | 'emoji'>) { return this.api.request<Deck>(`/decks/${encodeURIComponent(id)}`, { method: 'PATCH', body: patch }) }
+  async remove(id: string) { await this.api.request(`/decks/${encodeURIComponent(id)}`, { method: 'DELETE' }) }
+  async addLexeme(deckId: string, lexemeId: string) {
+    const word = await this.lexemes.get(lexemeId)
+    await this.api.request(`/decks/${encodeURIComponent(deckId)}/lexemes`, { method: 'POST', body: { lexemeId, source: word?.source ?? 'dictionary' } })
+  }
+  async toggleLexeme(deckId: string, lexemeId: string) {
+    const state = await this.get()
+    const saved = !state.decks.find((deck) => deck.id === deckId)?.wordIds.includes(lexemeId)
+    if (saved) await this.addLexeme(deckId, lexemeId)
+    else await this.removeLexemes(deckId, [lexemeId])
+    return saved
+  }
+  async removeLexemes(deckId: string, lexemeIds: string[]) { await this.api.request(`/decks/${encodeURIComponent(deckId)}/lexemes`, { method: 'DELETE', body: { lexemeIds } }) }
+  async moveLexemes(sourceDeckId: string, targetDeckId: string, lexemeIds: string[]) { await this.api.request(`/decks/${encodeURIComponent(sourceDeckId)}/move`, { method: 'POST', body: { targetDeckId, lexemeIds } }) }
+  async removeLexemeEverywhere(lexemeId: string) {
+    const state = await this.get()
+    await Promise.all(state.decks.filter((deck) => deck.wordIds.includes(lexemeId)).map((deck) => this.removeLexemes(deck.id, [lexemeId])))
+  }
+}
+
+class ApiReviewRepository implements ReviewRepository {
+  constructor(private readonly api: ApiClient) {}
+  async start(mode: TrainingMode, lexemeIds: string[]) { return this.api.request<TrainingSession>('/training/sessions', { method: 'POST', body: { mode, lexemeIds } }) }
+  async get(id: string) { return this.api.request<TrainingSession | null>(`/training/sessions/${encodeURIComponent(id)}`) }
+  async answer(id: string, lexemeId: string, grade: ReviewGrade) { return this.api.request<TrainingSession>(`/training/sessions/${encodeURIComponent(id)}/answers`, { method: 'POST', body: { lexemeId, grade } }) }
+  async skipMissing(id: string, lexemeId: string) { return this.api.request<TrainingSession>(`/training/sessions/${encodeURIComponent(id)}/skip-missing`, { method: 'POST', body: { lexemeId } }) }
+  async stats() { return this.api.request<ReviewStats>('/review-stats') }
+}
+
+class ApiProfileRepository implements ProfileRepository {
+  constructor(private readonly api: ApiClient) {}
+  async get() { return this.api.request<Profile>('/profile') }
+  async update(patch: Partial<Profile>) { return this.api.request<Profile>('/profile', { method: 'PATCH', body: patch }) }
+}
+
+class SwitchableRepository<T> {
+  constructor(private readonly api: ApiClient, private readonly local: T, private readonly remote: T) {}
+  get current() { return this.api.isEnabled() ? this.remote : this.local }
+}
+
+class SwitchableUserLexemeRepository extends SwitchableRepository<UserLexemeRepository> implements UserLexemeRepository {
+  setUserKey(userKey: string) { this.current.setUserKey(userKey) }
+  list() { return this.current.list() }
+  get(id: string) { return this.current.get(id) }
+  create(input: UserLexemeInput) { return this.current.create(input) }
+  update(id: string, input: UserLexemeInput) { return this.current.update(id, input) }
+  remove(id: string) { return this.current.remove(id) }
+}
+
+class SwitchableLibraryRepository extends SwitchableRepository<LibraryRepository> implements LibraryRepository {
+  get() { return this.current.get() }
+  createDeck(title: string, emoji?: string) { return this.current.createDeck(title, emoji) }
+  updateDeck(id: string, patch: Pick<Deck, 'title' | 'emoji'>) { return this.current.updateDeck(id, patch) }
+  remove(id: string) { return this.current.remove(id) }
+  addLexeme(deckId: string, lexemeId: string) { return this.current.addLexeme(deckId, lexemeId) }
+  toggleLexeme(deckId: string, lexemeId: string) { return this.current.toggleLexeme(deckId, lexemeId) }
+  removeLexemes(deckId: string, lexemeIds: string[]) { return this.current.removeLexemes(deckId, lexemeIds) }
+  moveLexemes(sourceDeckId: string, targetDeckId: string, lexemeIds: string[]) { return this.current.moveLexemes(sourceDeckId, targetDeckId, lexemeIds) }
+  removeLexemeEverywhere(lexemeId: string) { return this.current.removeLexemeEverywhere(lexemeId) }
+}
+
+class SwitchableReviewRepository extends SwitchableRepository<ReviewRepository> implements ReviewRepository {
+  start(mode: TrainingMode, lexemeIds: string[]) { return this.current.start(mode, lexemeIds) }
+  get(id: string) { return this.current.get(id) }
+  answer(id: string, lexemeId: string, grade: ReviewGrade) { return this.current.answer(id, lexemeId, grade) }
+  skipMissing(id: string, lexemeId: string) { return this.current.skipMissing(id, lexemeId) }
+  stats() { return this.current.stats() }
+}
+
+class SwitchableProfileRepository extends SwitchableRepository<ProfileRepository> implements ProfileRepository {
+  get() { return this.current.get() }
+  update(patch: Partial<Profile>) { return this.current.update(patch) }
+}
+
+function localSnapshot(userKey: string): LocalSnapshot {
+  const defaultDeckIds = new Set(defaultLibrary.decks.map((deck) => deck.id))
+  const library = read('library', defaultLibrary)
+  return {
+    importKey: `local-v1:${userKey}`,
+    profile: read('profile', defaultProfile),
+    library: { decks: library.decks.filter((deck) => deck.wordIds.length > 0 || !defaultDeckIds.has(deck.id)) },
+    userLexemes: JSON.parse(localStorage.getItem(`${USER_LEXEME_STORAGE_PREFIX}:${userKey}`) ?? '[]') as UserLexeme[],
+  }
+}
+
 const staticLexemes = new StaticLexemeRepository()
-const userLexemes = new LocalUserLexemeRepository()
+const api = new ApiClient()
+const localUserLexemes = new LocalUserLexemeRepository()
+const remoteUserLexemes = new ApiUserLexemeRepository(api)
+const userLexemes = new SwitchableUserLexemeRepository(api, localUserLexemes, remoteUserLexemes)
+const lexemes = new CombinedLexemeRepository(staticLexemes, userLexemes)
 
 export const repositories = {
-  lexemes: new CombinedLexemeRepository(staticLexemes, userLexemes),
+  lexemes,
   userLexemes,
-  library: new LocalLibraryRepository(),
-  reviews: new LocalReviewRepository(),
-  profile: new LocalProfileRepository(),
+  library: new SwitchableLibraryRepository(api, new LocalLibraryRepository(), new ApiLibraryRepository(api, lexemes)),
+  reviews: new SwitchableReviewRepository(api, new LocalReviewRepository(), new ApiReviewRepository(api)),
+  profile: new SwitchableProfileRepository(api, new LocalProfileRepository(), new ApiProfileRepository(api)),
   auth: { async exchangeTelegramInitData() { return { id: 0, firstName: 'Ученик' } } } satisfies AuthGateway,
+  backend: {
+    isEnabled: () => api.isEnabled(),
+    authenticate: (initData: string) => api.authenticate(initData),
+    importLocalSnapshot: async (userKey: string) => {
+      if (!api.isEnabled()) return
+      await api.request('/import', { method: 'POST', body: localSnapshot(userKey) })
+    },
+  } satisfies BackendController,
   audio: { async getUrl() { return null } } satisfies AudioRepository,
 }
 

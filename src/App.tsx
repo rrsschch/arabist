@@ -19,13 +19,26 @@ const queryKeys = { lexemes: ['lexemes'], userLexemes: ['user-lexemes'], library
 export function App() {
   const profile = useQuery({ queryKey: queryKeys.profile, queryFn: () => repositories.profile.get() })
   const queryClient = useQueryClient()
-  const { colorScheme, user, isTelegram } = useTelegram()
+  const { colorScheme, user, isTelegram, initData } = useTelegram()
   useEffect(() => {
     repositories.userLexemes.setUserKey(isTelegram ? String(user.id) : 'demo')
     queryClient.invalidateQueries({ queryKey: queryKeys.lexemes })
     queryClient.invalidateQueries({ queryKey: queryKeys.userLexemes })
     queryClient.invalidateQueries({ queryKey: ['search'] })
   }, [isTelegram, queryClient, user.id])
+  useEffect(() => {
+    if (!isTelegram || !initData) return
+    let cancelled = false
+    const userKey = String(user.id)
+    repositories.backend.authenticate(initData)
+      .then(() => repositories.backend.importLocalSnapshot(userKey))
+      .then(() => {
+        if (cancelled) return
+        queryClient.invalidateQueries()
+      })
+      .catch((error) => console.warn('Backend bootstrap failed', error))
+    return () => { cancelled = true }
+  }, [initData, isTelegram, queryClient, user.id])
   useEffect(() => {
     const preference = profile.data?.theme ?? 'telegram'
     const resolved = preference === 'telegram' ? colorScheme : preference
