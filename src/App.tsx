@@ -281,9 +281,9 @@ function hasArabic(value: string) {
 
 function getLexemeWordSizeClass(text: string) {
   const words = text.trim().split(/\s+/).filter(Boolean).length
-  const chars = Array.from(text).length
-  if (words >= 5 || chars > 32) return 'lexeme-word-long'
-  if (words >= 3 || chars > 18) return 'lexeme-word-medium'
+  const chars = Array.from(text.replace(/\p{Mark}|\u0640|\s/gu, '')).length
+  if (words >= 5 || chars > 18) return 'lexeme-word-long'
+  if (words >= 3 || chars > 12) return 'lexeme-word-medium'
   return ''
 }
 
