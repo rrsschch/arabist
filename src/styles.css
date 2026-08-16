@@ -208,13 +208,17 @@ button, a { touch-action: manipulation; }
 .pos-personal { color: #9f1239; background: #ffe4e6; }
 .personal-badge { display: inline-flex; padding: .28rem .58rem; border-radius: 999px; color: var(--accent); background: var(--accent-soft); font-size: .62rem; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
 .lexeme-word-actions {
-  margin-top: 2.5rem; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center;
+  margin-top: 2.5rem; display: grid; grid-template-columns: 3.25rem minmax(0, 1fr) 3.25rem; align-items: center; gap: .6rem;
 }
 .lexeme-audio-button { justify-self: start; }
 .lexeme-save-button { justify-self: end; }
-.lexeme-word { margin: 0; min-width: 0; font-size: clamp(2.75rem, 15vw, 4.5rem); font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
-.lexeme-word-medium { font-size: clamp(2.3rem, 11vw, 3.4rem); line-height: 1.35; }
-.lexeme-word-long { font-size: clamp(1.8rem, 8.5vw, 2.7rem); line-height: 1.45; }
+.lexeme-word {
+  margin: 0; min-width: 0; max-width: 100%; text-align: center;
+  font-size: clamp(2.55rem, 14vw, 4.35rem); font-weight: 700; line-height: 1.2;
+  white-space: nowrap; overflow-wrap: normal; word-break: keep-all;
+}
+.lexeme-word-medium { font-size: clamp(2.05rem, 9.5vw, 3.05rem); line-height: 1.25; }
+.lexeme-word-long { font-size: clamp(1.55rem, 7vw, 2.25rem); line-height: 1.3; }
 .bookmark-button svg, .lexeme-save-button svg { transition: transform var(--motion-fast) var(--motion-ease), color var(--motion-fast), fill var(--motion-fast); }
 .bookmark-button.saved, .lexeme-save-button.saved { color: var(--accent); }
 .bookmark-button.saved svg, .lexeme-save-button.saved svg { fill: currentColor; }

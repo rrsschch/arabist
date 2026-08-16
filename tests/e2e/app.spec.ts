@@ -237,6 +237,15 @@ test('places audio and bookmark controls on either side of the lexeme', async ({
   expect(bookmarkBox!.width).toBeGreaterThanOrEqual(44)
 })
 
+test('keeps vowelled Arabic lexeme words on one line', async ({ page }) => {
+  await page.goto('/lexemes/ae2eb2a5-c43d-5b8a-aec8-556b588acb37')
+  const word = page.locator('.lexeme-word')
+  await expect(word).toHaveText('أَغُسْطُسُ')
+  await expect(word).toHaveCSS('white-space', 'nowrap')
+  const box = await word.boundingBox()
+  expect(box!.height).toBeLessThan(95)
+})
+
 test('renders Arabic and Russian example parts separately', async ({ page }) => {
   await page.goto('/lexemes/3cd23a89-b6b3-55c7-a807-d5b96feba2c2')
   const firstExample = page.locator('.example-card').first()
